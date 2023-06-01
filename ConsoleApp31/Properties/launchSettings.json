@@ -2,7 +2,7 @@
   "profiles": {
     "ConsoleApp31": {
       "commandName": "Project",
-      "nativeDebugging": false
+      "nativeDebugging": true
     }
   }
 }

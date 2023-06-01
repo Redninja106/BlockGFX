@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ConsoleApp31;
-internal class World
+internal class World : IDisposable
 {
     private readonly List<IGameComponent> components = new();
     private readonly Queue<IGameComponent> componentsToAdd = new();
@@ -57,6 +57,14 @@ internal class World
         while (componentsToAdd.Count > 0)
         {
             components.Add(componentsToAdd.Dequeue());
+        }
+    }
+
+    public void Dispose()
+    {
+        foreach (var disposable in components.OfType<IDisposable>())
+        {
+            disposable.Dispose();
         }
     }
 }

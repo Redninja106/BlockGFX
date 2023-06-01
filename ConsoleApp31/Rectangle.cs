@@ -11,6 +11,10 @@ internal struct Rectangle
     public Vector2 Position;
     public Vector2 Size;
 
+    public Rectangle(float x, float y, float width, float height) : this(new(x, y), new(width, height))
+    {
+    }
+
     public Rectangle(Vector2 position, Vector2 size)
     {
         Position = position;

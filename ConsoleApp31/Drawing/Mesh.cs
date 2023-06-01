@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Vortice.Direct3D;
 
 namespace ConsoleApp31.Drawing;
-internal class Mesh
+internal class Mesh : IDisposable
 {
     public Material Material { get; set; }
 
@@ -29,6 +29,9 @@ internal class Mesh
 
     public void Render(Camera camera, Matrix4x4 transform)
     {
+        if (Indices.Length is 0)
+            return;
+
         var context = Graphics.ImmediateContext;
 
         Material.RenderSetup(context, camera, transform);
@@ -37,5 +40,11 @@ internal class Mesh
         context.SetVertexBuffer(Vertices);
         context.SetIndexBuffer(Indices);
         context.DrawIndexed(Indices.Length, 0, 0);
+    }
+
+    public void Dispose()
+    {
+        Vertices.Dispose();
+        Indices.Dispose();
     }
 }

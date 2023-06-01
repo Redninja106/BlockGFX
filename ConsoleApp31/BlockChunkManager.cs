@@ -100,16 +100,28 @@ internal class BlockChunkManager : IGameComponent, ICollidable
         Chunks.Remove(coordinate);
     }
 
+    private BlockChunk? getBlockLastChunk;
+
     public bool TryGetBlock(BlockCoordinate worldCoordinate, out BlockData value)
     {
-        var chunk = GetChunk(worldCoordinate.ToChunkCoordinate());
-        
+        BlockChunk? chunk;
+
+        if (getBlockLastChunk?.location.Contains(worldCoordinate) ?? false)
+        {
+            chunk = getBlockLastChunk;
+        }
+        else
+        {
+            chunk = GetChunk(worldCoordinate.ToChunkCoordinate());
+        }
+
         if (chunk is null)
         {
             value = default;
             return false;
         }
 
+        getBlockLastChunk = chunk;
         value = chunk[worldCoordinate];
         return true;
     }
@@ -206,7 +218,7 @@ internal class BlockChunkManager : IGameComponent, ICollidable
 
 }
 
-public struct ChunkCoordinate
+public record struct ChunkCoordinate
 {
     public int X, Y, Z;
 
@@ -240,11 +252,17 @@ public struct ChunkCoordinate
     {
         return new(this.X + coordinate.X, this.Y + coordinate.Y, this.Z + coordinate.Z);
     }
+
+    public bool Contains(BlockCoordinate block)
+    {
+        return this == block.ToChunkCoordinate();
+    }
 }
 
 class ChunkCollider : ICollidable
 {
     private Vector3 globalOffset;
+    private ChunkCoordinate location;
     private List<Box> colliders;
 
     public ChunkCollider(ChunkCoordinate location, List<Box> colliders)
@@ -259,6 +277,15 @@ class ChunkCollider : ICollidable
 
         box.min += globalOffset;
         box.max += globalOffset;
+
+        var pos = location.ToBlockCoordinate().ToVector3();
+        var chunkCollider = new Box(pos, pos + Vector3.One * 16);
+
+        if (!chunkCollider.Intersect(box, out _))
+        {
+            overlap = default;
+            return false;
+        }
 
         overlap = default;
 

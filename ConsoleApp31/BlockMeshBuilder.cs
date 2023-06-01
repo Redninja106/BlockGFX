@@ -79,7 +79,6 @@ internal class BlockMeshBuilder
     {
         var normal = side.GetNormal();
 
-
         Vector3 axis = normal.Y is not 0 ? Vector3.UnitZ : Vector3.UnitY;
         Vector3 perpAxis = Vector3.Cross(normal, axis);
 

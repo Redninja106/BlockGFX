@@ -1,6 +1,7 @@
 ﻿using ConsoleApp31;
 using ConsoleApp31.Drawing;
 using ConsoleApp31.Extensions;
+using ConsoleApp31.GUI;
 using ConsoleApp31.Texturing;
 using GLFW;
 using Microsoft.VisualBasic;
@@ -66,6 +67,9 @@ class Program
 
         World.ClearQueues();
 
+        ElementRenderer renderer = new();
+        var tex = ImageTexture.FromFile("Assets/crosshair.png");
+        
         while (!Glfw.WindowShouldClose(Window))
         {
             Input.Update();
@@ -76,9 +80,13 @@ class Program
             Update();
             Render();
 
+            float size = .025f;
+            renderer.DrawTexture(new(0, 0, 1, 1), new(.5f - size / 2f, .5f - size / 2f, size, size), tex);
+
             Graphics.Present();
         }
 
+        World.Dispose();
         Graphics.Destroy();
         Glfw.Terminate();
     }

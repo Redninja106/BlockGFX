@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 using Vortice.Mathematics;
 
 namespace ConsoleApp31;
-internal class BlockChunk : IGameComponent
+internal class BlockChunk : IGameComponent, IDisposable
 {
     public const int Width = 16, Height = 16, Depth = 16;
 
@@ -30,6 +30,7 @@ internal class BlockChunk : IGameComponent
     public BlockChunk(BlockChunkManager manager, ChunkCoordinate location)
     {
         this.location = location;
+        this.Transform.Translate(location.ToBlockCoordinate().ToVector3() + Vector3.One * .5f);
 
         this.manager = manager;
 
@@ -56,10 +57,7 @@ internal class BlockChunk : IGameComponent
 
     public void Render(Camera camera)
     {
-        Mesh.Render(camera, Transform with 
-        { 
-            Position = location.ToBlockCoordinate().ToVector3() + Transform.Position + Vector3.One * .5f 
-        });
+        Mesh.Render(camera, Transform);
     }
 
     public void Update(float dt)
@@ -85,8 +83,8 @@ internal class BlockChunk : IGameComponent
     {
         get
         {
-            if (!IndexInBounds(x, y, z))
-                throw new IndexOutOfRangeException();
+            // if (!IndexInBounds(x, y, z))
+            //     throw new IndexOutOfRangeException();
 
             return ref blocks[y * Width * Depth + x * Depth + z]; 
         }
@@ -113,6 +111,11 @@ internal class BlockChunk : IGameComponent
     public BlockCoordinate ToLocal(BlockCoordinate worldCoordinate)
     {
         return worldCoordinate - this.location.ToBlockCoordinate();
+    }
+
+    public void Dispose()
+    {
+        Mesh.Dispose();
     }
 }
 

@@ -42,7 +42,7 @@ internal static class Graphics
             FeatureLevel.Level_9_1,
         };
 
-        Result hr = D3D11.D3D11CreateDevice(null, DriverType.Hardware, DeviceCreationFlags.None, featureLevels, out ID3D11Device? device0);
+        Result hr = D3D11.D3D11CreateDevice(null, DriverType.Hardware, DeviceCreationFlags.Debug, featureLevels, out ID3D11Device? device0);
 
         if (hr.Failure)
             throw new Exception();

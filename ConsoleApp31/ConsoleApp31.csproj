@@ -1,8 +1,8 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net7.0-windows</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
 	  <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -17,32 +17,16 @@
   </ItemGroup>
 
   <ItemGroup>
-	<None Update="Assets\bedrock.png">
-	  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	</None>
-	<None Update="Assets\cobblestone.png">
-	  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	</None>
-	<None Update="Assets\dirt.png">
-	  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	</None>
-	<None Update="Assets\grass_block_side.png">
+	<None Update="Assets\*.png">
 		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	</None>
-	<None Update="Assets\grass_block_top.png">
-	  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	</None>
-	<None Update="Assets\stone.png">
-	  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	</None>
+	  
 	<None Update="glfw.dll">
 		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	</None>
-	<None Update="Shaders\chunk_ps.hlsl">
-		<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	</None>
-	<None Update="Shaders\chunk_vs.hlsl">
-		<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  
+	<None Update="Shaders\*.hlsl">
+		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	</None>
   </ItemGroup>
 

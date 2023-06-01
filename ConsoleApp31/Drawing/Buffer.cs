@@ -47,6 +47,7 @@ internal abstract class Buffer<T> : IDisposable
 
     public void Dispose()
     {
+        InternalBuffer.Dispose();
         GC.SuppressFinalize(this);
     }
 

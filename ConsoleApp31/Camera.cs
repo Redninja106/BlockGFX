@@ -70,8 +70,8 @@ internal class Camera
 
             var mouseDelta = Input.MousePosition - lastMousePos;
 
-            yr -= mouseDelta.X * 0.0005f * MathF.PI;
-            xr += mouseDelta.Y * 0.0005f * MathF.PI;
+            yr -= mouseDelta.X * 0.0002f * MathF.PI;
+            xr += mouseDelta.Y * 0.0002f * MathF.PI;
 
             xr = Math.Clamp(xr, -MathF.PI / 2f + 0.001f, MathF.PI / 2f - 0.001f);
 
@@ -84,7 +84,7 @@ internal class Camera
             lastMousePos = new Vector2(DisplayWidth / 2, DisplayHeight / 2);
         }
 
-        // Input.MouseVisible = !mouseCaptured;
+        Input.MouseVisible = !mouseCaptured;
 
         Vector3 deltaXZ = Vector3.Zero;
 
@@ -100,7 +100,7 @@ internal class Camera
         if (Input.IsKeyDown(Keys.D))
             deltaXZ -= Vector3.UnitX;
 
-        if (isGrounded && Input.IsKeyPressed(Keys.Space))
+        if (isGrounded && Input.IsKeyDown(Keys.Space))
         {
             float jumpForce = MathF.Sqrt(-2 * gravity * jumpHeight);
 
@@ -182,10 +182,11 @@ internal class Camera
         }
 
         const int viewDistance = 5;
+        const int viewHeight = 8;
 
         ChunkCoordinate baseCoordinate = new(this.Transform.Position / BlockChunk.SizeVector);
 
-        for (int y = -viewDistance; y < viewDistance; y++)
+        for (int y = -viewHeight; y < viewHeight; y++)
         {
             for (int x = -viewDistance; x < viewDistance; x++)
             {
@@ -197,7 +198,7 @@ internal class Camera
 
                     if (chunk is null)
                     {
-                        if (Vector3.Distance(coordinate.ToVector3(), baseCoordinate.ToVector3()) < viewDistance)
+                        if (Vector3.Distance(coordinate.ToVector3() * new Vector3(1,0,1), baseCoordinate.ToVector3() * new Vector3(1,0,1)) < viewDistance)
                         {
                             chunkManager.AddChunk(coordinate);
                             return;
@@ -218,6 +219,7 @@ internal class Camera
 
     Box GetCollider()
     {
-        return new Box(this.Transform.Position - Vector3.One * .2f - Vector3.UnitY * 1.375f, this.Transform.Position + Vector3.One * .2f);
+        float sizeXZ = .6f;
+        return new Box(this.Transform.Position - Vector3.One * (sizeXZ*.5f) - Vector3.UnitY * 1.375f, this.Transform.Position + Vector3.One * (sizeXZ*.5f));
     }
 }
