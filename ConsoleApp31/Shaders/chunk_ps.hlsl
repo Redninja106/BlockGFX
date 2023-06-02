@@ -3,11 +3,23 @@ SamplerState grassSampler : register(s0);
 
 struct VSOut
 {
-	float4 position : SV_Position;
-	float2 uv : TEXCOORD;
+	float4 viewportPosition : SV_Position;
+	float2 uv : TEXCOORD0;
+	float4 worldPosition : TEXCOORD1;
 };
 
-float4 main(VSOut vsout) : SV_Target
+struct PixelShaderOut
 {
-	return grass.Sample(grassSampler, vsout.uv);
+	float4 position : SV_Target0;
+	float4 albedo : SV_Target1;
+};
+
+PixelShaderOut main(VSOut vsout)
+{
+	PixelShaderOut psout;
+	
+	psout.position = vsout.worldPosition;
+	psout.albedo = grass.Sample(grassSampler, vsout.uv);
+	
+	return psout;
 }

@@ -1,9 +1,19 @@
 ﻿using ConsoleApp31.Drawing;
 using Vortice.Direct3D11;
 
+namespace ConsoleApp31.Drawing;
+
 internal class Sampler : IDisposable
 {
+    public static Sampler PointWrap { get; private set; }
+
+
     public ID3D11SamplerState State { get; private set; }
+
+    public static void InitalizeSharedSamplers()
+    {
+        PointWrap = new(Filter.MinMagMipPoint, TextureAddressMode.Wrap);
+    }
 
     public Sampler(Filter filter, TextureAddressMode addressMode)
     {

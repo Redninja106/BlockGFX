@@ -1,4 +1,4 @@
-﻿using ConsoleApp31.Drawing;
+﻿using ConsoleApp31.Drawing.Deferred;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,5 +30,10 @@ internal static class DeviceContextExtensions
     public static void SetIndexBuffer(this ID3D11DeviceContext context, IndexBuffer indexBuffer)
     {
         context.IASetIndexBuffer(indexBuffer.InternalBuffer, Format.R32_UInt, 0);
+    }
+
+    public static void RenderToGBuffer(this ID3D11DeviceContext context, GBuffer gBuffer)
+    {
+        gBuffer.ApplyRenderTargets(context);
     }
 }

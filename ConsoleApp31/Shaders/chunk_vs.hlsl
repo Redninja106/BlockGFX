@@ -7,20 +7,23 @@
 
 struct VSOut
 {
-	float4 position : SV_Position;
-	float2 uv : TEXCOORD;
+	float4 viewportPosition : SV_Position;
+	float2 uv : TEXCOORD0;
+	float4 worldPosition : TEXCOORD1;
 };
 
 VSOut main(float3 position : POSITION, float2 uv : TEXCOORD)
 {
 	VSOut result;
-	result.position = float4(position, 1);
+	result.worldPosition = float4(position, 1);
 	
-	result.position = mul(result.position, world);
-	result.position = mul(result.position, view);
-	result.position = mul(result.position, proj);
+	result.worldPosition = mul(result.worldPosition, world);
+	
+	result.viewportPosition = mul(result.worldPosition, view);
+	result.viewportPosition = mul(result.viewportPosition, proj);
 	
 	result.uv = uv;
+	
 	return result;
 	
 }

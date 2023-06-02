@@ -57,7 +57,7 @@ internal class BlockChunk : IGameComponent, IDisposable
 
     public void Render(Camera camera)
     {
-        Mesh.Render(camera, Transform);
+        Mesh.Render(camera, this.manager.SharedMaterial, Transform);
     }
 
     public void Update(float dt)
@@ -69,7 +69,7 @@ internal class BlockChunk : IGameComponent, IDisposable
         var builder = new BlockMeshBuilder(this.manager.TextureAtlas, this.manager);
         var meshBuilder = builder.BuildMesh(this, Width, Height, Depth);
         meshBuilder.Finish(out var verts, out var inds);
-        Mesh = new Mesh(verts, inds, manager.SharedMaterial);
+        Mesh = new Mesh(verts, inds);
 
         Collider = new(this.location, new BlockBoundingBoxBuilder().Build(this.blocks, Width, Height, Depth));
     }

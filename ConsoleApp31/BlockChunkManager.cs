@@ -267,6 +267,7 @@ class ChunkCollider : ICollidable
 
     public ChunkCollider(ChunkCoordinate location, List<Box> colliders)
     {
+        this.location = location;
         this.globalOffset = -location.ToBlockCoordinate().ToVector3();
         this.colliders = colliders;
     }
@@ -278,14 +279,14 @@ class ChunkCollider : ICollidable
         box.min += globalOffset;
         box.max += globalOffset;
 
-        var pos = location.ToBlockCoordinate().ToVector3();
-        var chunkCollider = new Box(pos, pos + Vector3.One * 16);
-
-        if (!chunkCollider.Intersect(box, out _))
-        {
-            overlap = default;
-            return false;
-        }
+        //var pos = location.ToBlockCoordinate().ToVector3();
+        //var chunkCollider = new Box(pos, pos + Vector3.One * 16);
+        //
+        //if (!chunkCollider.Intersect(box, out _))
+        //{
+        //    overlap = default;
+        //    return false;
+        //}
 
         overlap = default;
 

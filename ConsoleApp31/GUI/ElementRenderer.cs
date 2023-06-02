@@ -55,6 +55,7 @@ internal class ElementRenderer
         
         context.SetVertexBuffer(quadBuffer);
 
+        context.RSSetState(null);
         context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         context.OMSetBlendState(this.blendState);
         
