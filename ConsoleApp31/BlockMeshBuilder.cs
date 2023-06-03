@@ -94,17 +94,22 @@ internal class BlockMeshBuilder
         bounds.GetCorners(out Vector2 topLeft, out Vector2 topRight, out Vector2 bottomLeft, out Vector2 bottomRight);
 
         uint faceIndex = (uint)faceCount++;
+
+        TextureAtlas.GetTileLocation(blockID, side, out uint x, out uint y);
+
         faceInfos.Add(new()
         {
             position = offset,
             up = axis,
-            right = perpAxis
+            right = perpAxis,
+            atlasLocationX = x,
+            atlasLocationY = y
         });
 
-        vertices[0] = new(offset + .5f * (normal + axis + perpAxis), faceIndex, topLeft, new(1, 1));
+        vertices[0] = new(offset + .5f * (normal + axis + perpAxis), faceIndex, topLeft, new(0, 0));
         vertices[1] = new(offset + .5f * (normal - axis + perpAxis), faceIndex, bottomLeft, new(0, 1));
         vertices[2] = new(offset + .5f * (normal + axis - perpAxis), faceIndex, topRight, new(1, 0));
-        vertices[3] = new(offset + .5f * (normal - axis - perpAxis), faceIndex, bottomRight, new(0, 0));
+        vertices[3] = new(offset + .5f * (normal - axis - perpAxis), faceIndex, bottomRight, new(1, 1));
         
         return new MeshPart<BlockVertex>(vertices, indices);
     }

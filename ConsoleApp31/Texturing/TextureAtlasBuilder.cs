@@ -113,4 +113,10 @@ class TextureAtlas
     {
         return GetTileBounds((int)side, indices[block]);
     }
+
+    public void GetTileLocation(BlockID block, Orientation side, out uint x, out uint y)
+    {
+        x = 16 * (uint)side;
+        y = 16 * (uint)(indices[block]);
+    }
 }

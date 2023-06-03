@@ -181,8 +181,6 @@ class BlockChunkRenderer
         // do the face index pass
         context.OMSetRenderTargets(renderTargetView: Graphics.RenderTargetView, depthStencilTarget.DepthStencilView);
         context.OMSetUnorderedAccessView(1, chunk.Mesh.faces!.UnorderedAccessView);
-        raytracingShader.ResourceViews[0] = chunk.Mesh.hitBoxBuffer.ShaderResourceView;
-        raytracingShader.ResourceViews[1] = chunk.Mesh.faceInfos.ShaderResourceView;
         faceVisibilityMaterial.RenderSetup(context, Program.Camera, chunk.Transform.GetMatrix());
         chunk.Mesh.InvokeDraw(context);
         context.OMSetUnorderedAccessView(1, null!);
@@ -190,10 +188,17 @@ class BlockChunkRenderer
         // dispatch raytracing compute shader 
         rtConsts.Update(new()
         {
-            sunDirection = Vector3.Normalize(new(MathF.Cos(Program.time * .5f), MathF.Sin(Program.time * .5f), .5f))
+            sunDirection = Vector3.Normalize(new(MathF.Cos(Program.time * .75f), MathF.Sin(Program.time * .75f), .5f)),
+            atlasTileSize = new(16f / chunkManager.TextureAtlas.Texture.Width, 16f / chunkManager.TextureAtlas.Texture.Height),
         });
 
+        this.raytracingShader.SamplerStates[0] = colorMaterial.Sampler.State;
+        this.raytracingShader.ResourceViews[0] = chunk.Mesh.hitBoxBuffer.ShaderResourceView;
+        this.raytracingShader.ResourceViews[1] = chunk.Mesh.faceInfos.ShaderResourceView;
+        this.raytracingShader.ResourceViews[2] = chunkManager.TextureAtlas.Texture.ShaderResourceView;
+
         this.raytracingShader.UnorderedAccessViews[0] = chunk.Mesh.faces!.UnorderedAccessView;
+
         context.SetComputeShader(this.raytracingShader);
         context.Dispatch(chunk.Mesh.faces.Width / 16, 1, 1);
         context.CSSetUnorderedAccessView(0, null);
@@ -209,6 +214,7 @@ class BlockChunkRenderer
 struct RaytracingConstants
 {
     public Vector3 sunDirection;
+    public Vector2 atlasTileSize; 
 }
 
 struct FaceInfo
@@ -216,4 +222,6 @@ struct FaceInfo
     public Vector3 position;
     public Vector3 up;
     public Vector3 right;
+    public uint atlasLocationX;
+    public uint atlasLocationY;
 }
