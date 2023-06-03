@@ -16,7 +16,7 @@ namespace ConsoleApp31.Drawing;
 internal static class Graphics
 {
     public static ID3D11Device5 Device { get; set; } = null!;
-    public static ID3D11DeviceContext3 ImmediateContext { get; set; } = null!;
+    public static ID3D11DeviceContext4 ImmediateContext { get; set; } = null!;
     public static IDXGISwapChain1 SwapChain { get; set; } = null!;
     public static ID3D11RenderTargetView RenderTargetView { get; set; }
     public static ID3D11Debug Debug { get; set; }
@@ -34,6 +34,7 @@ internal static class Graphics
     {
         var featureLevels = new[]
         {
+            FeatureLevel.Level_11_1,
             FeatureLevel.Level_11_0,
             FeatureLevel.Level_10_1,
             FeatureLevel.Level_10_0,
@@ -52,7 +53,7 @@ internal static class Graphics
 
         // device0.Dispose();
 
-        ImmediateContext = Device!.ImmediateContext3;
+        ImmediateContext = Device!.ImmediateContext3.QueryInterface<ID3D11DeviceContext4>();
     }
 
     public static void CreateSwapChain(nint hwnd, int width, int height)

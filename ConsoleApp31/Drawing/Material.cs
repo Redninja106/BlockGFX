@@ -10,11 +10,11 @@ namespace ConsoleApp31.Drawing;
 internal class Material
 {
     public VertexShader VertexShader { get; }
-    public PixelShader PixelShader { get; }
+    public PixelShader? PixelShader { get; }
 
     public ConstantBuffer<MatrixBufferData> MatrixBuffer { get; }
 
-    public Material(VertexShader vertexShader, PixelShader pixelShader)
+    public Material(VertexShader vertexShader, PixelShader? pixelShader)
     {
         VertexShader = vertexShader;
         PixelShader = pixelShader;

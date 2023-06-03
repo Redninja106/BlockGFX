@@ -9,6 +9,8 @@ namespace ConsoleApp31.Drawing;
 internal class ConstantBuffer<T> : Buffer<T>
     where T : unmanaged
 {
+    private protected override int RequiredAlignment => 16;
+
     public ConstantBuffer(T data) : this()
     {
         Update(new ReadOnlySpan<T>(in data));

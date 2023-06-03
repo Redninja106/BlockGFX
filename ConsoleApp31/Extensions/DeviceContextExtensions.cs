@@ -16,9 +16,16 @@ internal static class DeviceContextExtensions
         vertexShader.ApplyTo(context);
     }
 
-    public static void SetPixelShader(this ID3D11DeviceContext context, PixelShader pixelShader)
+    public static void SetPixelShader(this ID3D11DeviceContext context, PixelShader? pixelShader)
     {
-        pixelShader.ApplyTo(context);
+        if (pixelShader is null)
+        {
+            context.PSSetShader(null);
+        }
+        else
+        {
+            pixelShader.ApplyTo(context);
+        }
     }
 
     public static void SetVertexBuffer<T>(this ID3D11DeviceContext context, VertexBuffer<T> vertexBuffer)
@@ -30,5 +37,10 @@ internal static class DeviceContextExtensions
     public static void SetIndexBuffer(this ID3D11DeviceContext context, IndexBuffer indexBuffer)
     {
         context.IASetIndexBuffer(indexBuffer.InternalBuffer, Format.R32_UInt, 0);
+    }
+
+    public static void SetComputeShader(this ID3D11DeviceContext context, ComputeShader computeShader)
+    {
+        computeShader.ApplyTo(context);
     }
 }

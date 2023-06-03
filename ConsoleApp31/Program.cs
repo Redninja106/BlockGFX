@@ -1,5 +1,6 @@
 ﻿using ConsoleApp31;
 using ConsoleApp31.Drawing;
+using ConsoleApp31.Drawing.Materials;
 using ConsoleApp31.Extensions;
 using ConsoleApp31.GUI;
 using ConsoleApp31.Texturing;
@@ -11,6 +12,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Threading;
 using Vortice;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
@@ -23,8 +26,8 @@ class Program
     public static World World { get; private set; }
     public static Camera Camera { get; private set; }
 
-    private static float time;
-    private static float lastTime;
+    public static float time;
+    public static float lastTime;
     private static Stopwatch? stopwatch;
     private static DepthStencilTexture depthStencilTexture;
 
@@ -38,7 +41,7 @@ class Program
         }
 
         Glfw.WindowHint(Hint.ClientApi, ClientApi.None);
-        Window = Glfw.CreateWindow(initialWidth, initialHeight, "ConsoleApp31", Monitor.None, Window.None);
+        Window = Glfw.CreateWindow(initialWidth, initialHeight, "ConsoleApp31", GLFW.Monitor.None, Window.None);
         
         Input.Initialize(Window);
 
@@ -47,13 +50,6 @@ class Program
         Graphics.CreateSwapChain(hwnd, initialWidth, initialHeight);
         
         Glfw.SetFramebufferSizeCallback(Window, (window, width, height) => Graphics.Resize(width, height));
-
-        depthStencilTexture = new DepthStencilTexture(initialWidth, initialHeight);
-        Graphics.AfterResize += () =>
-        {
-            depthStencilTexture?.Dispose();
-            depthStencilTexture = new(Graphics.RenderTargetWidth, Graphics.RenderTargetHeight);
-        };
 
         Camera = new(.01f, 100f, MathF.PI / 2f);
         Camera.Transform.Position = new(0,8,0);
@@ -67,21 +63,24 @@ class Program
 
         World.ClearQueues();
 
-        ElementRenderer renderer = new();
+        ElementRenderer elemRenderer = new();
         var tex = ImageTexture.FromFile("Assets/crosshair.png");
-        
+
+        BlockChunkRenderer renderer = new(chunkManager);
+
         while (!Glfw.WindowShouldClose(Window))
         {
             Input.Update();
             Glfw.PollEvents();
 
             var context = Graphics.ImmediateContext;
-
+            context.ClearState();
+            
             Update();
-            Render();
+            renderer.Render();
 
             float size = .025f;
-            renderer.DrawTexture(new(0, 0, 1, 1), new(.5f - size / 2f, .5f - size / 2f, size, size), tex);
+            elemRenderer.DrawTexture(new(0, 0, 1, 1), new(.5f - size / 2f, .5f - size / 2f, size, size), tex);
 
             Graphics.Present();
         }
@@ -103,28 +102,118 @@ class Program
         World.Update(deltaTime);
     }
 
-    private static void Render()
+}
+
+class BlockChunkRenderer
+{
+    private DepthStencilTexture depthStencilTarget;
+    private RenderTexture faceIndexTarget;
+    private ChunkMaterial colorMaterial;
+    private BlockChunkManager chunkManager;
+    private Material depthOnlyMaterial;
+    private Material faceVisibilityMaterial;
+
+    private ID3D11DepthStencilState depthPassDSState;
+    private ID3D11DepthStencilState postDepthPassDSState;
+    private ComputeShader raytracingShader;
+    private ConstantBuffer<RaytracingConstants> rtConsts;
+
+    public BlockChunkRenderer(BlockChunkManager chunkManager)
+    {
+        this.chunkManager = chunkManager;
+        depthStencilTarget = new DepthStencilTexture(Graphics.RenderTargetWidth, Graphics.RenderTargetHeight);
+        
+        Graphics.AfterResize += () =>
+        {
+            depthStencilTarget?.Dispose();
+            depthStencilTarget = new(Graphics.RenderTargetWidth, Graphics.RenderTargetHeight);
+
+            faceIndexTarget?.Dispose();
+            faceIndexTarget = new(Graphics.RenderTargetWidth, Graphics.RenderTargetHeight, Format.R32_UInt);
+        };
+
+        VertexShader blockmeshVS = new("Shaders/blockmesh_vs.hlsl");
+
+        colorMaterial = new(
+            blockmeshVS,
+            new("Shaders/blockmesh_color_ps.hlsl"),
+            chunkManager.TextureAtlas.Texture,
+            new(Filter.MinMagMipPoint, TextureAddressMode.Clamp)
+            );
+
+        depthOnlyMaterial = new(blockmeshVS, null);
+
+        faceVisibilityMaterial = new(blockmeshVS, new("blockmesh_facevisibility_ps.hlsl"));
+
+        depthPassDSState = Graphics.Device.CreateDepthStencilState(new(true, DepthWriteMask.All, ComparisonFunction.Less));
+        postDepthPassDSState = Graphics.Device.CreateDepthStencilState(new(true, DepthWriteMask.Zero, ComparisonFunction.LessEqual));
+
+        raytracingShader = new("blockmesh_raytracing_cs.hlsl");
+        rtConsts = new();
+        raytracingShader.ConstantBuffers[0] = rtConsts.InternalBuffer;
+    }
+
+    public void Render()
     {
         var context = Graphics.ImmediateContext;
+        var chunk = chunkManager.Chunks.Values.Single();
 
         context.ClearRenderTargetView(Graphics.RenderTargetView, new(0x8F, 0xD9, 0xEA));
-        context.ClearDepthStencilView(depthStencilTexture.DepthStencilView, DepthStencilClearFlags.Depth, 1, 0);
-
-        context.OMSetRenderTargets(Graphics.RenderTargetView, depthStencilTexture.DepthStencilView);
-
+        context.ClearDepthStencilView(depthStencilTarget.DepthStencilView, DepthStencilClearFlags.Depth, 1, 0);
+        context.ClearUnorderedAccessView(chunk.Mesh.faces?.UnorderedAccessView, new Vector4(1, 0, 0, 0));
+        
         context.RSSetViewport(0, 0, Graphics.RenderTargetWidth, Graphics.RenderTargetHeight);
 
-        World.Render(Camera);
+        // World.Render(Camera);
+
+        // do a depth-only pass to avoid overdraw when determining face visibility
+        context.OMSetRenderTargets(renderTargetView: null!, depthStencilTarget.DepthStencilView);
+
+        context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        context.OMSetDepthStencilState(depthPassDSState);
+
+        depthOnlyMaterial.RenderSetup(context, Program.Camera, chunk.Transform.GetMatrix());
+        chunk.Mesh.InvokeDraw(context);
+
+        // don't write to depth from here on out
+        context.OMSetDepthStencilState(postDepthPassDSState);
+
+        // do the face index pass
+        context.OMSetRenderTargets(renderTargetView: Graphics.RenderTargetView, depthStencilTarget.DepthStencilView);
+        context.OMSetUnorderedAccessView(1, chunk.Mesh.faces!.UnorderedAccessView);
+        raytracingShader.ResourceViews[0] = chunk.Mesh.hitBoxBuffer.ShaderResourceView;
+        raytracingShader.ResourceViews[1] = chunk.Mesh.faceInfos.ShaderResourceView;
+        faceVisibilityMaterial.RenderSetup(context, Program.Camera, chunk.Transform.GetMatrix());
+        chunk.Mesh.InvokeDraw(context);
+        context.OMSetUnorderedAccessView(1, null!);
+
+        // dispatch raytracing compute shader 
+        rtConsts.Update(new()
+        {
+            sunDirection = Vector3.Normalize(new(MathF.Cos(Program.time * .5f), MathF.Sin(Program.time * .5f), .5f))
+        });
+
+        this.raytracingShader.UnorderedAccessViews[0] = chunk.Mesh.faces!.UnorderedAccessView;
+        context.SetComputeShader(this.raytracingShader);
+        context.Dispatch(chunk.Mesh.faces.Width / 16, 1, 1);
+        context.CSSetUnorderedAccessView(0, null);
+
+        // do the color pass
+        context.OMSetRenderTargets(Graphics.RenderTargetView, depthStencilTarget.DepthStencilView);
+        colorMaterial.PixelShader!.ResourceViews[1] = chunk.Mesh.faces!.ShaderResourceView;
+        colorMaterial.RenderSetup(context, Program.Camera, chunk.Transform.GetMatrix());
+        chunk.Mesh.InvokeDraw(context);
     }
 }
-struct Vertex
+
+struct RaytracingConstants
+{
+    public Vector3 sunDirection;
+}
+
+struct FaceInfo
 {
     public Vector3 position;
-    public Vector2 uv;
-
-    public Vertex(Vector3 position, Vector2 uv)
-    {
-        this.position = position;
-        this.uv = uv;
-    }
+    public Vector3 up;
+    public Vector3 right;
 }

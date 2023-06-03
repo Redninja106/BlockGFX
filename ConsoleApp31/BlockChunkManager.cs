@@ -46,12 +46,7 @@ internal class BlockChunkManager : IGameComponent, ICollidable
 
         TextureAtlas = atlasBuilder.Finish();
 
-        SharedMaterial = new(
-            new("Shaders/chunk_vs.hlsl"),
-            new("Shaders/chunk_ps.hlsl"),
-            TextureAtlas.AtlasTexture,
-            new(Filter.MinMagMipPoint, TextureAddressMode.Clamp)
-            );
+        AddChunk(new(0, 0, 0));
     }
 
     public void Render(Camera camera)

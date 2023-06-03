@@ -6,7 +6,7 @@ using Vortice.DXGI;
 
 namespace ConsoleApp31.Drawing;
 
-abstract class Texture : IDisposable
+class Texture : IDisposable
 {
     public ID3D11Texture2D InternalTexture { get; private set; }
 
@@ -20,7 +20,7 @@ abstract class Texture : IDisposable
         Height = height;
         Format = format;
 
-        Texture2DDescription desc = new(format, width, height, bindFlags: bindFlags);
+        Texture2DDescription desc = new(format, width, height, bindFlags: bindFlags, mipLevels: 1);
 
         InternalTexture = Graphics.Device.CreateTexture2D(in desc);
     }

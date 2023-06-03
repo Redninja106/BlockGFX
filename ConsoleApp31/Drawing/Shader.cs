@@ -59,7 +59,7 @@ internal abstract class Shader : IDisposable
     {
         Source = LoadSourceFile(fileName);
 
-        ByteCode = Compiler.Compile(Source, entryPoint, fileName, compilationProfile);
+        ByteCode = Compiler.Compile(Source, entryPoint, fileName, compilationProfile, ShaderFlags.Debug);
 
         CreateShader(ByteCode);
     }

@@ -10,6 +10,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json.Serialization.Metadata;
 using System.Threading.Tasks;
+using Vortice.Direct3D11;
+using Vortice.DXGI;
 using Vortice.Mathematics;
 
 namespace ConsoleApp31;
@@ -21,7 +23,7 @@ internal class BlockChunk : IGameComponent, IDisposable
     readonly BlockData[] blocks = new BlockData[Width * Height * Depth];
     readonly BlockChunkManager manager;
     public ChunkCollider Collider;
-    Mesh Mesh;
+    public BlockMesh Mesh { get; set; }
 
     public ChunkCoordinate location;
 
@@ -57,8 +59,8 @@ internal class BlockChunk : IGameComponent, IDisposable
 
     public void Render(Camera camera)
     {
-        Mesh.Render(camera, Transform);
     }
+
 
     public void Update(float dt)
     {
@@ -67,11 +69,8 @@ internal class BlockChunk : IGameComponent, IDisposable
     public void Rebuild()
     {
         var builder = new BlockMeshBuilder(this.manager.TextureAtlas, this.manager);
-        var meshBuilder = builder.BuildMesh(this, Width, Height, Depth);
-        meshBuilder.Finish(out var verts, out var inds);
-        Mesh = new Mesh(verts, inds, manager.SharedMaterial);
-
-        Collider = new(this.location, new BlockBoundingBoxBuilder().Build(this.blocks, Width, Height, Depth));
+        Mesh = builder.BuildMesh(this, Width, Height, Depth);
+        this.Collider = new(this.location, Mesh.hitBoxes);
     }
 
     public ref BlockData this[int index]
@@ -117,34 +116,5 @@ internal class BlockChunk : IGameComponent, IDisposable
     {
         Mesh.Dispose();
     }
+
 }
-
-//static class Ext
-//{
-//    public static bool Is<T>(this object obj) where T : class
-//    {
-//        return obj.Is<T>(out _);
-//    }
-
-//    public static bool Is<T>(this object obj, [NotNullWhen(true)] out T? t) where T : class
-//    {
-//        if (obj is T or IProxy<T>)
-//        {
-//            t = obj.As<T>()!;
-//            return true;
-//        }
-        
-//        t = null;
-//        return false;
-//    }
-
-//    public static T? As<T>(this object obj) where T : class
-//    {
-//        return obj as T ?? (obj as IProxy<T>)?.GetObject();
-//    }
-//}
-
-//interface IProxy<T> where T : class
-//{
-//    T GetObject();
-//}

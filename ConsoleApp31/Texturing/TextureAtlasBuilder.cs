@@ -81,7 +81,7 @@ class TextureAtlas
     public const int TileHeight = 16;
     public const int AtlasWidth = 6;
 
-    public ImageTexture AtlasTexture { get; private set; }
+    public ImageTexture Texture { get; private set; }
 
     private Dictionary<BlockID, int> indices;
     private int rowCount;
@@ -91,11 +91,11 @@ class TextureAtlas
         this.indices = indices;
         this.rowCount = rows.Count;
         
-        AtlasTexture = new(TileWidth * AtlasWidth, TileHeight * rows.Count);
+        Texture = new(TileWidth * AtlasWidth, TileHeight * rows.Count);
 
         for (int i = 0; i < rows.Count; i++)
         {
-            AtlasTexture.UpdateRegion(rows[i], 0, i * TileHeight, TileWidth * AtlasWidth, TileHeight);
+            Texture.UpdateRegion(rows[i], 0, i * TileHeight, TileWidth * AtlasWidth, TileHeight);
         }
     }
 

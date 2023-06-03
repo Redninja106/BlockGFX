@@ -8,7 +8,7 @@ using Vortice.Direct3D11;
 
 namespace ConsoleApp31.Drawing;
 
-internal abstract class Buffer<T> : IDisposable
+internal class Buffer<T> : IDisposable
     where T : unmanaged
 {
     public readonly BindFlags bindFlags;
@@ -16,7 +16,14 @@ internal abstract class Buffer<T> : IDisposable
     public ID3D11Buffer InternalBuffer { get; private set; }
     public int Length { get; }
 
-    public Buffer(int length, BindFlags bindFlags)
+    private protected virtual int RequiredAlignment => 0;
+
+    public Buffer(Span<T> data, BindFlags bindFlags) : this(data.Length, bindFlags)
+    {
+        Update(data);
+    }
+
+    public Buffer(int length, BindFlags bindFlags, ResourceOptionFlags miscFlags = ResourceOptionFlags.None)
     {
         this.bindFlags = bindFlags;
         this.Length = length;
@@ -24,11 +31,14 @@ internal abstract class Buffer<T> : IDisposable
         if (length == 0)
             length = 16;
 
-        InternalBuffer = Graphics.Device.CreateBuffer(Ceil16(length * Unsafe.SizeOf<T>()), bindFlags);
+        InternalBuffer = Graphics.Device.CreateBuffer(Align(length * Unsafe.SizeOf<T>(), RequiredAlignment), bindFlags, miscFlags: miscFlags, structureByteStride: Unsafe.SizeOf<T>());
 
-        static int Ceil16(int x)
+        static int Align(int x, int alignment)
         {
-            return (x + 15) / 16 * 16;
+            if (alignment is 0)
+                return x;
+
+            return (x + (alignment-1)) / alignment * alignment;
         }
     }
 
@@ -45,7 +55,7 @@ internal abstract class Buffer<T> : IDisposable
         }
     }
 
-    public void Dispose()
+    public virtual void Dispose()
     {
         InternalBuffer.Dispose();
         GC.SuppressFinalize(this);

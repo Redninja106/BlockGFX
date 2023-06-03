@@ -6,7 +6,7 @@ internal class BlockBoundingBoxBuilder
     {
     }
 
-    public List<Box> Build(BlockData[] blocks, int width, int height, int depth)
+    public List<Box> Build(BlockChunk chunk, int width, int height, int depth)
     {
         List<Box> result = new();
 
@@ -16,7 +16,7 @@ internal class BlockBoundingBoxBuilder
             {
                 for (int z = 0; z < depth; z++)
                 {
-                    if (!blocks[y * width * depth + x * depth + z].IsTransparent)
+                    if (!chunk[y * width * depth + x * depth + z].IsTransparent)
                     {
                         result.Add(new(new(x, y, z), new(x + 1, y + 1, z + 1)));
                     }

@@ -25,7 +25,6 @@ internal class Camera
     public float NearPlane { get; set; }
     public float FarPlane { get; set; }
     public float FieldOfView { get; set; }
-    public bool IsStatic => false;
 
     private Vector2 lastMousePos;
     private float xr, yr;
@@ -184,37 +183,37 @@ internal class Camera
         const int viewDistance = 5;
         const int viewHeight = 8;
 
-        ChunkCoordinate baseCoordinate = new(this.Transform.Position / BlockChunk.SizeVector);
+        //ChunkCoordinate baseCoordinate = new(this.Transform.Position / BlockChunk.SizeVector);
 
-        for (int y = -viewHeight; y < viewHeight; y++)
-        {
-            for (int x = -viewDistance; x < viewDistance; x++)
-            {
-                for (int z = -viewDistance; z < viewDistance; z++)
-                {
-                    ChunkCoordinate coordinate = new(x + baseCoordinate.X, y + baseCoordinate.Y, z + baseCoordinate.Z);
+        //for (int y = -viewHeight; y < viewHeight; y++)
+        //{
+        //    for (int x = -viewDistance; x < viewDistance; x++)
+        //    {
+        //        for (int z = -viewDistance; z < viewDistance; z++)
+        //        {
+        //            ChunkCoordinate coordinate = new(x + baseCoordinate.X, y + baseCoordinate.Y, z + baseCoordinate.Z);
 
-                    var chunk = chunkManager.GetChunk(coordinate);
+        //            var chunk = chunkManager.GetChunk(coordinate);
 
-                    if (chunk is null)
-                    {
-                        if (Vector3.Distance(coordinate.ToVector3() * new Vector3(1,0,1), baseCoordinate.ToVector3() * new Vector3(1,0,1)) < viewDistance)
-                        {
-                            chunkManager.AddChunk(coordinate);
-                            return;
-                        }
-                    }
-                }
-            }
-        }
+        //            if (chunk is null)
+        //            {
+        //                if (Vector3.Distance(coordinate.ToVector3() * new Vector3(1,0,1), baseCoordinate.ToVector3() * new Vector3(1,0,1)) < viewDistance)
+        //                {
+        //                    chunkManager.AddChunk(coordinate);
+        //                    return;
+        //                }
+        //            }
+        //        }
+        //    }
+        //}
 
-        foreach (var (_, chunk) in chunkManager.Chunks)
-        {
-            if (Vector3.Distance(chunk.location.ToVector3(), baseCoordinate.ToVector3()) > viewDistance)
-            {
-                chunkManager.RemoveChunk(chunk.location);
-            }
-        }
+        //foreach (var (_, chunk) in chunkManager.Chunks)
+        //{
+        //    if (Vector3.Distance(chunk.location.ToVector3(), baseCoordinate.ToVector3()) > viewDistance)
+        //    {
+        //        chunkManager.RemoveChunk(chunk.location);
+        //    }
+        //}
     }
 
     Box GetCollider()
