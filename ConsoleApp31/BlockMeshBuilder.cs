@@ -183,7 +183,7 @@ class BlockMesh : IDisposable
     public StructuredBuffer<Box> hitBoxBuffer;
     public List<Box> hitBoxes;
 
-    // highest bit of the alpha channel is visiblity flag from first rasterizer stage
+    // highest bit of the alpha channel is visiblity flag from first rasterizer pass
     public UnorderedAccessTexture? faces;
 
     public BlockMesh(Span<BlockVertex> vertices, Span<uint> indices, List<Box> hitBoxes, FaceInfo[] faceInfos)

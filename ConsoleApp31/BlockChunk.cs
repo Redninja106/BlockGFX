@@ -23,6 +23,7 @@ internal class BlockChunk : IGameComponent, IDisposable
     readonly BlockData[] blocks = new BlockData[Width * Height * Depth];
     readonly BlockChunkManager manager;
     public ChunkCollider Collider;
+    public Volume blockVolume;
     public BlockMesh Mesh { get; set; }
 
     public ChunkCoordinate location;
@@ -55,6 +56,10 @@ internal class BlockChunk : IGameComponent, IDisposable
                 }
             }
         }
+
+        blockVolume = new(Width, Height, Depth, Format.R32_UInt);
+        blockVolume.Update<BlockData>(this.blocks);
+
     }
 
     public void Render(Camera camera)
@@ -70,7 +75,9 @@ internal class BlockChunk : IGameComponent, IDisposable
     {
         var builder = new BlockMeshBuilder(this.manager.TextureAtlas, this.manager);
         Mesh = builder.BuildMesh(this, Width, Height, Depth);
-        this.Collider = new(this.location, Mesh.hitBoxes);
+        this.Collider = new(this.location, this.blocks, Mesh.hitBoxes);
+        blockVolume = new(Width, Height, Depth, Format.R32_UInt);
+        blockVolume.Update<BlockData>(this.blocks);
     }
 
     public ref BlockData this[int index]

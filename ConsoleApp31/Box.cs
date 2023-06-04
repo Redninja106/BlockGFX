@@ -54,6 +54,26 @@ internal struct Box : ICollidable
         return false;
     }
 
+    public bool PartialRaycast(Ray ray, out float tNear, out float tFar)
+    {
+        float t1 = (min.X - ray.origin.X) * ray.inverseDirection.X;
+        float t2 = (max.X - ray.origin.X) * ray.inverseDirection.X;
+        float t3 = (min.Y - ray.origin.Y) * ray.inverseDirection.Y;
+        float t4 = (max.Y - ray.origin.Y) * ray.inverseDirection.Y;
+        float t5 = (min.Z - ray.origin.Z) * ray.inverseDirection.Z;
+        float t6 = (max.Z - ray.origin.Z) * ray.inverseDirection.Z;
+
+        tNear = MathF.Max(MathF.Max(MathF.Min(t1, t2), MathF.Min(t3, t4)), MathF.Min(t5, t6));
+        tFar = MathF.Min(MathF.Min(MathF.Max(t1, t2), MathF.Max(t3, t4)), MathF.Max(t5, t6));
+
+        if (tNear <= tFar && tFar > 0 && tNear < ray.length)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     public bool Intersect(Box other, out Box overlap)
     {
         if (max.X < other.min.X || min.X > other.max.X ||

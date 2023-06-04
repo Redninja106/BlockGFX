@@ -8,9 +8,11 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using Vortice.Direct3D11;
+using Vortice.Mathematics;
 
 namespace ConsoleApp31;
 internal class BlockChunkManager : IGameComponent, ICollidable
@@ -169,7 +171,7 @@ internal class BlockChunkManager : IGameComponent, ICollidable
 
         foreach (var collider in colliders)
         {
-            if (collider is not null && collider.Raycast(ray, out var lastHit) && lastHit.T < hit.T)
+            if (collider is not null && collider.Raycast2(ray, out var lastHit) && lastHit.T < hit.T)
             {
                 hit = lastHit;
             }
@@ -177,7 +179,8 @@ internal class BlockChunkManager : IGameComponent, ICollidable
 
         return hit.Hit;
     }
-     
+
+
     private RentedArray<ChunkCollider?> GetNearbyColliders(BlockCoordinate location, float radius)
     {
         var result = new RentedArray<ChunkCollider?>(3 * 3 * 3);
@@ -259,11 +262,12 @@ class ChunkCollider : ICollidable
     private Vector3 globalOffset;
     private ChunkCoordinate location;
     private List<Box> colliders;
-
-    public ChunkCollider(ChunkCoordinate location, List<Box> colliders)
+    private BlockData[] blocks;
+    public ChunkCollider(ChunkCoordinate location, BlockData[] blocks, List<Box> colliders)
     {
         this.globalOffset = -location.ToBlockCoordinate().ToVector3();
         this.colliders = colliders;
+        this.blocks = blocks;
     }
 
     public bool Intersect(Box box, out Box overlap)
@@ -319,6 +323,99 @@ class ChunkCollider : ICollidable
 
         return hit.Hit;
     }
+
+
+    public bool Raycast2(Ray ray, out RaycastHit hit)
+    {
+        hit = default;
+
+        // ray.origin -= Vector3.One * .5f;
+
+        ray.direction = ray.direction.Normalized();
+
+        Vector3 voxel = new((int)MathF.Floor(ray.origin.X), (int)MathF.Floor(ray.origin.Y), (int)MathF.Floor(ray.origin.Z));
+        Vector3 step = new(MathF.Sign(ray.direction.X), MathF.Sign(ray.direction.Y), MathF.Sign(ray.direction.Z));
+
+        if (step.LengthSquared() == 0)
+            return false;
+
+        float tNear, tFar;
+        Box box;
+        box.min = new Vector3(0, 0, 0);
+        box.max = new Vector3(16, 16, 16);
+        box.PartialRaycast(ray, out tNear, out tFar);
+
+        Vector3 start = ray.At(MathF.Max(0, tNear));
+        Vector3 end = ray.At(tFar);
+
+        Console.WriteLine(start);
+
+        Vector3 d = end - start;
+
+        Vector3 tDelta = step / d;
+
+        Vector3 tMax = tDelta * new Vector3(Frac(start.X, step.X), Frac(start.Y, step.Y), Frac(start.Z, step.Z));
+
+        float Frac(float f,float s)
+        {
+            if (s > 0)
+                return 1 - f + MathF.Floor(f);
+            else
+                return f - MathF.Floor(f);
+        }
+        
+        Vector3 normal;
+
+        while (true)
+        {
+            if (step.X is not 0 && tMax.X < tMax.Y)
+            {
+                if (step.X is not 0 && tMax.X < tMax.Z)
+                {
+                    voxel.X += step.X;
+                    tMax.X += tDelta.X;
+                    normal = Vector3.UnitX * -step.X;
+                }
+                else
+                {
+                    voxel.Z += step.Z;
+                    tMax.Z += tDelta.Z;
+                    normal = Vector3.UnitZ * -step.Z;
+                }
+            }
+            else
+            {
+                if (step.Y is not 0 && tMax.Y < tMax.Z)
+                {
+                    voxel.Y += step.Y;
+                    tMax.Y += tDelta.Y;
+                    normal = Vector3.UnitY * -step.Y;
+                }
+                else
+                {
+                    voxel.Z += step.Z;
+                    tMax.Z += tDelta.Z;
+                    normal = Vector3.UnitZ * -step.Z;
+                }
+            }
+
+            if (voxel.X < 0 || voxel.X >= 16 || voxel.Y < 0 || voxel.Y >= 16 || voxel.Z < 0 || voxel.Z >= 16)
+            {
+                return false;
+            }
+
+            if (!blocks[(int)(voxel.Y * 16 * 16 + voxel.X * 16 + voxel.Z)].IsTransparent)
+            {
+                hit = new(0, normal, new(voxel, voxel + Vector3.One));
+
+
+                return true;
+            }
+
+        }
+
+        // return voxel.X < 0 || voxel.X >= 16 || voxel.Y < 0 || voxel.Y >= 16 || voxel.Z < 0 || voxel.Z >= 16;
+    }
 }
 
 interface ICollidable
@@ -345,6 +442,11 @@ struct Ray
         this.direction = direction;
         this.inverseDirection = Vector3.One / direction;
         this.length = length;
+    }
+
+    public Vector3 At(float t)
+    {
+        return origin + direction * t;
     }
 }
 

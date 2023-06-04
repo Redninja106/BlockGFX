@@ -188,14 +188,18 @@ class BlockChunkRenderer
         // dispatch raytracing compute shader 
         rtConsts.Update(new()
         {
-            sunDirection = Vector3.Normalize(new(MathF.Cos(Program.time * .75f), MathF.Sin(Program.time * .75f), .5f)),
+            sunDirection = Vector3.Normalize(new(MathF.Cos(Program.time * .75f + MathF.PI/2), MathF.Sin(Program.time * .75f + MathF.PI / 2), .5f)),
             atlasTileSize = new(16f / chunkManager.TextureAtlas.Texture.Width, 16f / chunkManager.TextureAtlas.Texture.Height),
+            chunkWidth = BlockChunk.Width,
+            chunkHeight = BlockChunk.Height,
+            chunkDepth = BlockChunk.Depth,
         });
 
         this.raytracingShader.SamplerStates[0] = colorMaterial.Sampler.State;
         this.raytracingShader.ResourceViews[0] = chunk.Mesh.hitBoxBuffer.ShaderResourceView;
         this.raytracingShader.ResourceViews[1] = chunk.Mesh.faceInfos.ShaderResourceView;
         this.raytracingShader.ResourceViews[2] = chunkManager.TextureAtlas.Texture.ShaderResourceView;
+        this.raytracingShader.ResourceViews[3] = chunk.blockVolume.ShaderResourceView;
 
         this.raytracingShader.UnorderedAccessViews[0] = chunk.Mesh.faces!.UnorderedAccessView;
 
@@ -214,7 +218,12 @@ class BlockChunkRenderer
 struct RaytracingConstants
 {
     public Vector3 sunDirection;
-    public Vector2 atlasTileSize; 
+    float _pad0;
+    public Vector2 atlasTileSize;
+    float _pad1, _pad2;
+    public uint chunkWidth;
+    public uint chunkHeight;
+    public uint chunkDepth;
 }
 
 struct FaceInfo
