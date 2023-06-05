@@ -37,6 +37,7 @@ internal class BlockChunkManager : IGameComponent, ICollidable
         var dirtFaces = new BlockFaces("Assets/dirt.png");
         var stoneFaces = new BlockFaces("Assets/stone.png");
         var bedrockFaces = new BlockFaces("Assets/bedrock.png");
+        var glowstoneFaces = new BlockFaces("Assets/glowstone.png");
 
         var atlasBuilder = new TextureAtlasBuilder();
 
@@ -45,6 +46,7 @@ internal class BlockChunkManager : IGameComponent, ICollidable
         atlasBuilder.AddBlock(new(3), cobbleFaces);
         atlasBuilder.AddBlock(new(4), stoneFaces);
         atlasBuilder.AddBlock(new(5), bedrockFaces);
+        atlasBuilder.AddBlock(new(6), glowstoneFaces);
 
         TextureAtlas = atlasBuilder.Finish();
 

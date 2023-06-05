@@ -106,10 +106,12 @@ internal class BlockMeshBuilder
             atlasLocationY = y
         });
 
-        vertices[0] = new(offset + .5f * (normal + axis + perpAxis), faceIndex, topLeft, new(0, 0));
-        vertices[1] = new(offset + .5f * (normal - axis + perpAxis), faceIndex, bottomLeft, new(0, 1));
-        vertices[2] = new(offset + .5f * (normal + axis - perpAxis), faceIndex, topRight, new(1, 0));
-        vertices[3] = new(offset + .5f * (normal - axis - perpAxis), faceIndex, bottomRight, new(1, 1));
+        float e = 0.0005f;
+
+        vertices[0] = new(offset + .5f * (normal + axis + perpAxis), faceIndex, topLeft, new(e, e));
+        vertices[1] = new(offset + .5f * (normal - axis + perpAxis), faceIndex, bottomLeft, new(e, 1-e));
+        vertices[2] = new(offset + .5f * (normal + axis - perpAxis), faceIndex, topRight, new(1-e, e));
+        vertices[3] = new(offset + .5f * (normal - axis - perpAxis), faceIndex, bottomRight, new(1-e, 1-e));
         
         return new MeshPart<BlockVertex>(vertices, indices);
     }
@@ -185,6 +187,7 @@ class BlockMesh : IDisposable
 
     // highest bit of the alpha channel is visiblity flag from first rasterizer pass
     public UnorderedAccessTexture? faces;
+    public uint age;
 
     public BlockMesh(Span<BlockVertex> vertices, Span<uint> indices, List<Box> hitBoxes, FaceInfo[] faceInfos)
     {
@@ -211,6 +214,11 @@ class BlockMesh : IDisposable
         {
             faces = new(16 * faceInfos.Length, 16, Format.R8G8B8A8_UNorm, Format.R8G8B8A8_Typeless);
         }
+    }
+
+    public void Update()
+    {
+        age++;
     }
 
     public void Render(Camera camera, Material material, Matrix4x4 transformationMatrix)

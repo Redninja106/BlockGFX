@@ -47,6 +47,8 @@ internal class Camera
         FieldOfView = fieldOfView;
     }
 
+    private int selectedBlock;
+
     public void Update(float dt)
     {
         this.DisplayWidth = Graphics.RenderTargetWidth;
@@ -159,6 +161,25 @@ internal class Camera
             .Reset()
             .LookAt(Transform.Position, Transform.Position + Transform.Forward, Vector3.UnitY);
 
+        Keys[] keys = new[]
+        {
+            Keys.Alpha1,
+            Keys.Alpha2,
+            Keys.Alpha3,
+            Keys.Alpha4,
+            Keys.Alpha5,
+            Keys.Alpha6,
+        };
+
+        for (int i = 0; i < keys.Length; i++)
+        {
+            if (Input.IsKeyPressed(keys[i]))
+            {
+                selectedBlock = i + 1;
+            }
+        }
+
+
         if (Input.IsMouseButtonPressed(MouseButton.Left) || Input.IsMouseButtonPressed(MouseButton.Right))
         {
             bool breaking = Input.IsMouseButtonPressed(MouseButton.Right);
@@ -176,7 +197,7 @@ internal class Camera
                 var collider = GetCollider();
 
                 if (breaking || !collider.Intersect(new(block, block + Vector3.One), out _))
-                    chunkManager.TrySetBlock(new(block), new(breaking ? 0 : 3));
+                    chunkManager.TrySetBlock(new(block), new BlockData(breaking ? 0 : this.selectedBlock));
             }
         }
 

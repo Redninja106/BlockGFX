@@ -17,7 +17,10 @@ struct FaceInfo
 
 cbuffer Constants
 {
+	float3 camPos;
+	uint ticks;
 	float3 sunDirection;
+	uint blockMeshAge;
 	float2 atlasTileSize;
 	uint3 blockDataSize;
 };
@@ -34,12 +37,6 @@ Texture3D<uint> blockData : register(t3);
 
 // uavs
 RWTexture2D<unorm float4> blockmeshFaces;
-
-static groupshared Random rng;
-float random()
-{
-	return rng.NextFloat();
-}
 
 struct Ray
 {
@@ -101,49 +98,16 @@ bool BoxRaycast(Box box, Ray ray, out float t, out float3 normal)
 	return false;
 }
 
-float3 randomUnitVector()
+float3 randomUnitVector(inout Random rand)
 {
 	float3 result;
 	do
 	{
-		result = float3(random(), random(), random());
+		result = float3(rand.NextFloat() * 2 - 1, rand.NextFloat() * 2 - 1, rand.NextFloat() * 2 - 1);
 	}
 	while (dot(result, result) > 1);
 	
 	return result;
-}
-
-float3 rayColor(Ray ray, out Ray bounce)
-{
-	uint elements, stride;
-	boxes.GetDimensions(elements, stride);
-	
-	float closestT = (1.0 / 0.0);
-	float3 closestNormal;
-	bool hitAny;
-	for (uint i = 0; i < elements; i++)
-	{
-		Box box = boxes[i];
-		
-		float t;
-		float3 hitNormal;
-		if (BoxRaycast(box, ray, t, hitNormal))
-		{
-			if (t < closestT)
-			{
-				closestT = t;
-				closestNormal = hitNormal;
-				hitAny = true;
-			}
-		}
-	}
-	
-	bounce = CreateRay(ray.at(closestT), closestNormal + randomUnitVector());
-	
-	if (hitAny)
-		return max(0, dot(sunDirection, closestNormal));
-	else
-		return float3(.5, .5, .7);
 }
 
 // http://www.cs.yorku.ca/~amana/research/grid.pdf
@@ -176,10 +140,13 @@ float3 getMax(float3 start, float3 step)
 		step.z > 0 ? 1 - frac(start.z) : frac(start.z));
 }
 
-bool raycast(Ray ray)
+bool raycast(Ray ray, out float outT, out float3 outNormal, out int3 outVoxel)
 {
-	int3 voxel = int3(ray.origin);
+	int3 voxel = int3(floor(ray.origin));
 	int3 step = sign(ray.direction);
+	
+	if (step.x == 0 && step.y == 0 && step.z == 0)
+		return false;
 	
 	float tNear, tFar;
 	Box box;
@@ -194,7 +161,9 @@ bool raycast(Ray ray)
 	float3 tDelta = step / d;
 	float3 tMax = tDelta * getMax(start, step);
 	
-	int dist = 1000;
+	int dist = 100;
+	
+	float t = 0;
 	
 	while (--dist)
 	{
@@ -205,6 +174,8 @@ bool raycast(Ray ray)
 		
 		if (blockData[voxel.zxy] != 0)
 		{
+			outT = t;
+			outVoxel = voxel;
 			return true;
 		}
 		
@@ -214,11 +185,15 @@ bool raycast(Ray ray)
 			{
 				voxel.x += step.x;
 				tMax.x += tDelta.x;
+				t += tDelta.x;
+				outNormal = float3(-step.x, 0, 0);
 			}
 			else
 			{
 				voxel.z += step.z;
 				tMax.z += tDelta.z;
+				t += tDelta.z;
+				outNormal = float3(0, 0, -step.z);
 			}
 		}
 		else
@@ -227,21 +202,113 @@ bool raycast(Ray ray)
 			{
 				voxel.y += step.y;
 				tMax.y += tDelta.y;
+				t += tDelta.y;
+				outNormal = float3(0, -step.y, 0);
 			}
 			else
 			{
 				voxel.z += step.z;
 				tMax.z += tDelta.z;
+				t += tDelta.z;
+				outNormal = float3(0, 0, -step.z);
 			}
 		}
 	}
 	
 	return false;
 }
+static Random rng;
+
+float2 CalcFaceUV(int3 voxel, float3 pos, float3 normal)
+{
+	float3 components = (pos - voxel) * (float3(1, 1, 1) - normal);
+			
+	float2 uv;
+	if (components.x == 0)
+		uv = components.zy;
+	else if (components.y == 0)
+		uv = components.xz;
+	else
+		uv = components.xy;
+	
+	uv.y = 1 - uv.y;
+	
+	if (normal.x > 0 || normal.z < 0 || normal.y > 0)
+		uv.x = 1 - uv.x;
+	
+	return uv;
+}
+
+#define GLOWSTONE_STR_FLOAT .4
+#define GLOWSTONE_STR float3(GLOWSTONE_STR_FLOAT,GLOWSTONE_STR_FLOAT,GLOWSTONE_STR_FLOAT)
+
+float3 rayColor(Ray ray)
+{
+	static const int bounces = 4;
+	
+	uint elements, stride;
+	boxes.GetDimensions(elements, stride);
+	
+	static float3 emissions[bounces];
+	static float3 strengths[bounces];
+	
+	[fastopt] 
+	for (int i = 0; i < bounces-1; i++)
+	{
+		float t;
+		float3 normal;
+		int3 voxel;
+		if (raycast(ray, t, normal, voxel))
+		{
+			// determine face uv
+			float3 pos = ray.at(t);
+			
+			if (normal.x > 0 || normal.y > 0 || normal.z > 0)
+				voxel = int3(float3(voxel) - normal);
+			
+			float2 uv = CalcFaceUV(voxel, pos, normal);
+			uint id = blockData[voxel.zxy];
+			
+			float3 attenuation = atlas[int2(uv.x * 16, (uv.y + (id - 1)) * 16)];
+			
+			strengths[i] = float3(.5, .5, .5);// attenuation;
+			
+			if (id == 6)
+			{
+				emissions[i] = GLOWSTONE_STR;
+			}
+			else
+			{
+				emissions[i] = float3(0, 0, 0);
+			}
+		}
+		else
+		{
+			emissions[i] = max(0, dot(sunDirection, ray.direction)) * float3(0.56078434, 0.8509804, 0.91764706);
+			strengths[i] = float3(0, 0, 0);
+			break;
+		}
+		
+		ray = CreateRay(ray.at(t), normal + randomUnitVector(rng));
+	}
+	
+	float3 color = float3(1, 1, 1);
+	for (int j = bounces - 1; j >= 0; j--)
+	{
+		color *= strengths[j];
+		color += emissions[j];
+	}
+		
+	return color;
+}
+
 
 [numthreads(16, 16, 1)]
 void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, uint3 threadID : SV_GroupThreadID)
 {
+	rng.seed = dispatchID.x * dispatchID.y ^ threadID.x + threadID.y ^ groupID.x + groupID.y ^ ticks;
+	rng.Cycle();
+	
 	float4 prevCol = blockmeshFaces[dispatchID.xy];
 
 	if (prevCol.a == 0)
@@ -254,16 +321,36 @@ void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, ui
 	float2 uv = threadID.xy / 16.0;
 	
 	Ray ray;
-	ray.origin = float3(.5, .5, .5) + face.position + .5 * (1.001*normal - face.up * (uv.y * 2 - 1 + (1.0 / 32)) - face.right * (uv.x * 2 - 1 + (1.0 / 32)));
-	ray.direction = -sunDirection;
+	ray.origin = float3(.5, .5, .5) + face.position + .5 * (normal * 1.0001 - face.up * (uv.y * 2 - 1 + (rng.NextFloat() + .5) * (1.0 / 16.0)) - face.right * (uv.x * 2 - 1 + (rng.NextFloat() + .5) * (1.0 / 16.0)));
+	ray.direction = normalize(reflect(normalize(ray.origin-camPos), normal));
+	//ray.direction = normalize(normal + randomUnitVector(rng));
 	ray.inverseDirection = 1.0 / ray.direction;
 	ray.length = 100;
 	
-	int samples = 30;
+	float4 atlasColor = atlas[uint2(face.atlasLocationX, face.atlasLocationY) + uint2((uint) (uv.x * 16), (uint) (uv.y * 16))];
 	
-	bool hitAny = raycast(ray);
+	int samples = 1000;
+	float4 col = float4(0, 0, 0, 0);
 	
-	float4 col = atlas[uint2(face.atlasLocationX, face.atlasLocationY) + uint2((uint) (uv.x * 16), (uint) (uv.y * 16))];
+	[fastopt] for (int i = 0; i < samples; i++)
+	{
+		ray.direction = normalize(reflect(normalize(ray.origin-camPos), normal));
+		//ray.direction = normalize(normal + randomUnitVector(rng));
+		ray.inverseDirection = 1.0 / ray.direction;
+		col += float4(atlasColor.xyz * rayColor(ray), 1);
+		if (face.atlasLocationY == 5*16)
+		{
+			//col += float4(GLOWSTONE_STR, 0);
+		}
+	}
 	
-	blockmeshFaces[dispatchID.xy] = col * (hitAny ? float4(.4, .4, .4, 1) : (.4 + .6 * max(0, dot(sunDirection, -normal))));
+	col.xyz /= float(samples);
+	
+	col = max(float4(0, 0, 0, 0), min(float4(1, 1, 1, 1), col));
+	
+	// (hitAny ? float4(.4, .4, .4, 1) : (.4 + .6 * max(0, dot(sunDirection, -normal))));
+	col = pow(col, 1/2.2);
+	
+	blockmeshFaces[dispatchID.xy] = float4(col.xyz, 1);
+	
 }

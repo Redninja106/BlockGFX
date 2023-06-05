@@ -24,6 +24,7 @@ internal class BlockChunk : IGameComponent, IDisposable
     readonly BlockChunkManager manager;
     public ChunkCollider Collider;
     public Volume blockVolume;
+    public Volume uvVolume;
     public BlockMesh Mesh { get; set; }
 
     public ChunkCoordinate location;
@@ -56,10 +57,6 @@ internal class BlockChunk : IGameComponent, IDisposable
                 }
             }
         }
-
-        blockVolume = new(Width, Height, Depth, Format.R32_UInt);
-        blockVolume.Update<BlockData>(this.blocks);
-
     }
 
     public void Render(Camera camera)

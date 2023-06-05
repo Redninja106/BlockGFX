@@ -28,7 +28,7 @@ class Program
 
     public static float time;
     public static float lastTime;
-    private static Stopwatch? stopwatch;
+    public static Stopwatch? stopwatch;
     private static DepthStencilTexture depthStencilTexture;
 
     public static void Main()
@@ -157,10 +157,10 @@ class BlockChunkRenderer
     {
         var context = Graphics.ImmediateContext;
         var chunk = chunkManager.Chunks.Values.Single();
+        chunk.Mesh.Update();
 
         context.ClearRenderTargetView(Graphics.RenderTargetView, new(0x8F, 0xD9, 0xEA));
         context.ClearDepthStencilView(depthStencilTarget.DepthStencilView, DepthStencilClearFlags.Depth, 1, 0);
-        context.ClearUnorderedAccessView(chunk.Mesh.faces?.UnorderedAccessView, new Vector4(1, 0, 0, 0));
         
         context.RSSetViewport(0, 0, Graphics.RenderTargetWidth, Graphics.RenderTargetHeight);
 
@@ -188,12 +188,17 @@ class BlockChunkRenderer
         // dispatch raytracing compute shader 
         rtConsts.Update(new()
         {
-            sunDirection = Vector3.Normalize(new(MathF.Cos(Program.time * .75f + MathF.PI/2), MathF.Sin(Program.time * .75f + MathF.PI / 2), .5f)),
+            ticks = (uint)Program.stopwatch!.ElapsedTicks,
+            camPos = Program.Camera.Transform.Position,
+            sunDirection = Vector3.Normalize(new(MathF.Cos(Program.time * .75f + MathF.PI / 2), MathF.Sin(Program.time * .75f + MathF.PI / 2), .5f)),
+            age = chunk.Mesh.age,
             atlasTileSize = new(16f / chunkManager.TextureAtlas.Texture.Width, 16f / chunkManager.TextureAtlas.Texture.Height),
             chunkWidth = BlockChunk.Width,
             chunkHeight = BlockChunk.Height,
             chunkDepth = BlockChunk.Depth,
         });
+
+        Console.WriteLine(chunk.Mesh.age);
 
         this.raytracingShader.SamplerStates[0] = colorMaterial.Sampler.State;
         this.raytracingShader.ResourceViews[0] = chunk.Mesh.hitBoxBuffer.ShaderResourceView;
@@ -217,10 +222,12 @@ class BlockChunkRenderer
 
 struct RaytracingConstants
 {
+    public Vector3 camPos;
+    public uint ticks;
     public Vector3 sunDirection;
-    float _pad0;
+    public uint age;
     public Vector2 atlasTileSize;
-    float _pad1, _pad2;
+    private int _pad2, _pad3;
     public uint chunkWidth;
     public uint chunkHeight;
     public uint chunkDepth;

@@ -58,8 +58,19 @@ internal abstract class Shader : IDisposable
     public void Reload()
     {
         Source = LoadSourceFile(fileName);
+        
+        try
+        {
+            ByteCode = Compiler.Compile(Source, entryPoint, fileName, compilationProfile, ShaderFlags.Debug);
+        }
+        catch (Exception ex)
+        {
+            ReadOnlySpan<char> lineNumber = ex.Message.AsSpan()[(ex.Message.IndexOf("hlsl(")+5)..];
 
-        ByteCode = Compiler.Compile(Source, entryPoint, fileName, compilationProfile, ShaderFlags.Debug);
+            lineNumber = lineNumber[..lineNumber.IndexOf(',')];
+
+            throw new Exception($"Shader compilation error: {ex.Message}. line: '{Source.Split("\n")[int.Parse(lineNumber.ToString())-1]}'");
+        }
 
         CreateShader(ByteCode);
     }
