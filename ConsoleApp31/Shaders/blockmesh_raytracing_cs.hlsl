@@ -107,7 +107,7 @@ float3 randomUnitVector(inout Random rand)
 	}
 	while (dot(result, result) > 1);
 	
-	return result;
+	return normalize(result);
 }
 
 // http://www.cs.yorku.ca/~amana/research/grid.pdf
@@ -322,8 +322,8 @@ void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, ui
 	
 	Ray ray;
 	ray.origin = float3(.5, .5, .5) + face.position + .5 * (normal * 1.0001 - face.up * (uv.y * 2 - 1 + (rng.NextFloat() + .5) * (1.0 / 16.0)) - face.right * (uv.x * 2 - 1 + (rng.NextFloat() + .5) * (1.0 / 16.0)));
-	ray.direction = normalize(reflect(normalize(ray.origin-camPos), normal));
-	//ray.direction = normalize(normal + randomUnitVector(rng));
+	//ray.direction = normalize(reflect(normalize(ray.origin-camPos), normal));
+	ray.direction = normalize(normal + randomUnitVector(rng));
 	ray.inverseDirection = 1.0 / ray.direction;
 	ray.length = 100;
 	
@@ -334,8 +334,9 @@ void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, ui
 	
 	[fastopt] for (int i = 0; i < samples; i++)
 	{
-		ray.direction = normalize(reflect(normalize(ray.origin-camPos), normal));
-		//ray.direction = normalize(normal + randomUnitVector(rng));
+		//ray.direction = normalize(reflect(normalize(ray.origin-camPos), normal));
+		ray.origin = float3(.5, .5, .5) + face.position + .5 * (normal * 1.0001 - face.up * (uv.y * 2 - 1 + (rng.NextFloat() + .5) * (1.0 / 16.0)) - face.right * (uv.x * 2 - 1 + (rng.NextFloat() + .5) * (1.0 / 16.0)));
+		ray.direction = normalize(normal + randomUnitVector(rng));
 		ray.inverseDirection = 1.0 / ray.direction;
 		col += float4(atlasColor.xyz * rayColor(ray), 1);
 		if (face.atlasLocationY == 5*16)
