@@ -72,7 +72,8 @@ internal class BlockChunk : IGameComponent, IDisposable
     {
         var builder = new BlockMeshBuilder(this.manager.TextureAtlas, this.manager);
         Mesh = builder.BuildMesh(this, Width, Height, Depth);
-        this.Collider = new(this.location, this.blocks, Mesh.hitBoxes);
+        var bbBuilder = new BlockBoundingBoxBuilder();
+        this.Collider = new(this.location, this.blocks, bbBuilder.Build(this, 16,16,16));
         blockVolume = new(Width, Height, Depth, Format.R32_UInt);
         blockVolume.Update<BlockData>(this.blocks);
     }

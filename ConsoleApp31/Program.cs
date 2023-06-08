@@ -196,12 +196,11 @@ class BlockChunkRenderer
             chunkWidth = BlockChunk.Width,
             chunkHeight = BlockChunk.Height,
             chunkDepth = BlockChunk.Depth,
+            lightCount = (uint)chunk.Mesh.lights.Count,
         });
 
-        Console.WriteLine(chunk.Mesh.age);
-
         this.raytracingShader.SamplerStates[0] = colorMaterial.Sampler.State;
-        this.raytracingShader.ResourceViews[0] = chunk.Mesh.hitBoxBuffer.ShaderResourceView;
+        this.raytracingShader.ResourceViews[0] = chunk.Mesh.lightBuffer?.ShaderResourceView;
         this.raytracingShader.ResourceViews[1] = chunk.Mesh.faceInfos.ShaderResourceView;
         this.raytracingShader.ResourceViews[2] = chunkManager.TextureAtlas.Texture.ShaderResourceView;
         this.raytracingShader.ResourceViews[3] = chunk.blockVolume.ShaderResourceView;
@@ -227,7 +226,8 @@ struct RaytracingConstants
     public Vector3 sunDirection;
     public uint age;
     public Vector2 atlasTileSize;
-    private int _pad2, _pad3;
+    public uint lightCount;
+    private int _pad3;
     public uint chunkWidth;
     public uint chunkHeight;
     public uint chunkDepth;

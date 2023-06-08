@@ -350,8 +350,6 @@ class ChunkCollider : ICollidable
         Vector3 start = ray.At(MathF.Max(0, tNear));
         Vector3 end = ray.At(tFar);
 
-        Console.WriteLine(start);
-
         Vector3 d = end - start;
 
         Vector3 tDelta = step / d;

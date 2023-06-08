@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -10,6 +11,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
+using Vortice.Mathematics;
 
 namespace ConsoleApp31;
 internal class BlockMeshBuilder
@@ -21,6 +23,8 @@ internal class BlockMeshBuilder
 
     public BlockChunkManager BlockChunkManager { get; }
     public TextureAtlas TextureAtlas { get; }
+
+    private List<Light> lights = new();
 
     public BlockMeshBuilder(TextureAtlas textureAtlas, BlockChunkManager blockChunkManager)
     {
@@ -68,9 +72,8 @@ internal class BlockMeshBuilder
             }
         }
 
-        var boxes = bbBuilder.Build(chunk, width, height, depth);
         mb.Finish(out var vertices, out var indices);
-        return new(vertices, indices, boxes, faceInfos.ToArray());
+        return new(vertices, indices, lights, faceInfos.ToArray());
     }
 
     void CreateFaceIfNeeded(MeshBuilder<BlockVertex> mb, BlockCoordinate chunkOrigin, BlockCoordinate localCoordinate, BlockID id, Orientation side)
@@ -87,8 +90,8 @@ internal class BlockMeshBuilder
     {
         var normal = side.GetNormal();
 
-        Vector3 axis = normal.Y is not 0 ? Vector3.UnitZ : Vector3.UnitY;
-        Vector3 perpAxis = Vector3.Cross(normal, axis);
+        Vector3 up = normal.Y is not 0 ? Vector3.UnitZ : Vector3.UnitY;
+        Vector3 right = Vector3.Cross(normal, up);
 
         Rectangle bounds = TextureAtlas.GetTileBounds(blockID, side);
         bounds.GetCorners(out Vector2 topLeft, out Vector2 topRight, out Vector2 bottomLeft, out Vector2 bottomRight);
@@ -100,18 +103,39 @@ internal class BlockMeshBuilder
         faceInfos.Add(new()
         {
             position = offset,
-            up = axis,
-            right = perpAxis,
+            up = up,
+            right = right,
             atlasLocationX = x,
             atlasLocationY = y
         });
 
+        if (blockID.Value == 6)
+        {
+            Vector3 pos = offset + .5f * Vector3.One;
+            BlockCoordinate blockCoord = new(offset);
+
+            bool topTransparent = false, bottomTransparent = false, leftTransparent = false, rightTransparent = false;
+            BlockData block;
+
+            if (BlockChunkManager.TryGetBlock(blockCoord.OffsetBy(new(up)), out block))
+                topTransparent = block.IsTransparent;
+            if (BlockChunkManager.TryGetBlock(blockCoord.OffsetBy(new(-up)), out block))
+                bottomTransparent = block.IsTransparent;
+            if (BlockChunkManager.TryGetBlock(blockCoord.OffsetBy(new(-right)), out block))
+                leftTransparent = block.IsTransparent;
+            if (BlockChunkManager.TryGetBlock(blockCoord.OffsetBy(new(right)), out block))
+                rightTransparent = block.IsTransparent;
+
+            var l = Light.CreateForFace(pos, normal, up, right, topTransparent, bottomTransparent, leftTransparent, rightTransparent);
+            this.lights.Add(l);
+        }
+
         float e = 0.0005f;
 
-        vertices[0] = new(offset + .5f * (normal + axis + perpAxis), faceIndex, topLeft, new(e, e));
-        vertices[1] = new(offset + .5f * (normal - axis + perpAxis), faceIndex, bottomLeft, new(e, 1-e));
-        vertices[2] = new(offset + .5f * (normal + axis - perpAxis), faceIndex, topRight, new(1-e, e));
-        vertices[3] = new(offset + .5f * (normal - axis - perpAxis), faceIndex, bottomRight, new(1-e, 1-e));
+        vertices[0] = new(offset + .5f * (normal + up + right), faceIndex, topLeft, new(e, e));
+        vertices[1] = new(offset + .5f * (normal - up + right), faceIndex, bottomLeft, new(e, 1-e));
+        vertices[2] = new(offset + .5f * (normal + up - right), faceIndex, topRight, new(1-e, e));
+        vertices[3] = new(offset + .5f * (normal - up - right), faceIndex, bottomRight, new(1-e, 1-e));
         
         return new MeshPart<BlockVertex>(vertices, indices);
     }
@@ -175,6 +199,44 @@ class MeshBuilder<TVertex> where TVertex : unmanaged
     }
 }
 
+struct Light
+{
+    public Matrix4x4 projection;
+    public Vector3 position;
+    public Vector3 normal;
+    public Vector3 up;
+    public Vector3 right;
+
+    public bool Test(Vector3 position)
+    {
+        Vector4 clip = Vector4.Transform(new Vector4(position, 1), this.projection);
+        return MathF.Abs(clip.X) <= clip.W && MathF.Abs(clip.Y) <= clip.W && MathF.Abs(clip.Z) <= clip.W;
+    }
+
+    public static Light CreateForFace(Vector3 facePosition, Vector3 faceNormal, Vector3 faceUp, Vector3 faceRight, bool topTransparent, bool bottomTransparent, bool leftTransparent, bool rightTransparent)
+    {
+        float near = 0.001f;
+        float far = 100f;
+
+        float scale = 1.00001f;
+        float extensionAmount = 5;
+
+        float left = near * (leftTransparent ? -1 : -extensionAmount);
+        float right = scale * near * (rightTransparent ? 1 : extensionAmount);
+        float bottom = near * (bottomTransparent ? -1 : -extensionAmount);
+        float top = scale * near * (topTransparent ? 1 : extensionAmount);
+
+        return new()
+        {
+            projection = Matrix4x4.CreateLookAt(facePosition, facePosition + faceNormal, faceUp) * Matrix4x4.CreatePerspectiveOffCenter(left, right, bottom, top, near, far),
+            position = facePosition,
+            normal = faceNormal,
+            up = faceUp,
+            right = faceRight,
+        };
+    }
+}
+
 class BlockMesh : IDisposable
 {
     public VertexBuffer<BlockVertex> vertexBuffer;
@@ -182,14 +244,14 @@ class BlockMesh : IDisposable
     public IndexBuffer indexBuffer;
 
     public StructuredBuffer<FaceInfo> faceInfos;
-    public StructuredBuffer<Box> hitBoxBuffer;
-    public List<Box> hitBoxes;
+    public StructuredBuffer<Light>? lightBuffer;
+    public List<Light> lights;
 
     // highest bit of the alpha channel is visiblity flag from first rasterizer pass
     public UnorderedAccessTexture? faces;
     public uint age;
 
-    public BlockMesh(Span<BlockVertex> vertices, Span<uint> indices, List<Box> hitBoxes, FaceInfo[] faceInfos)
+    public BlockMesh(Span<BlockVertex> vertices, Span<uint> indices, List<Light> lights, FaceInfo[] faceInfos)
     {
         // render uids to render texture
 
@@ -203,15 +265,19 @@ class BlockMesh : IDisposable
         vertexBuffer = new(vertices);
         indexBuffer = new(indices);
 
-        this.hitBoxes = hitBoxes;
+        this.lights = lights;
 
-        var boxes = CollectionsMarshal.AsSpan(hitBoxes);
-        this.hitBoxBuffer = new(boxes);
+        if (lights.Count > 0)
+        {
+            var l = CollectionsMarshal.AsSpan(lights);
+            this.lightBuffer = new(l);
+        }
 
         this.faceInfos = new(faceInfos);
 
         if (faceInfos.Length != 0)
         {
+            //faces = new(16 * Math.Min(64, faceInfos.Length), 16 * (int)Math.Ceiling(faceInfos.Length/64.0), Format.R8G8B8A8_UNorm, Format.R8G8B8A8_Typeless);
             faces = new(16 * faceInfos.Length, 16, Format.R8G8B8A8_UNorm, Format.R8G8B8A8_Typeless);
         }
     }

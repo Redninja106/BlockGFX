@@ -21,9 +21,9 @@ internal abstract class Shader : IDisposable
     public string Source { get; private set; }
     public ReadOnlyMemory<byte> ByteCode { get; private set; }
 
-    public ID3D11Buffer[] ConstantBuffers { get; private set; } = new ID3D11Buffer[8];
-    public ID3D11ShaderResourceView[] ResourceViews { get; private set; } = new ID3D11ShaderResourceView[16];
-    public ID3D11SamplerState[] SamplerStates { get; private set; } = new ID3D11SamplerState[16];
+    public ID3D11Buffer?[] ConstantBuffers { get; private set; } = new ID3D11Buffer[8];
+    public ID3D11ShaderResourceView?[] ResourceViews { get; private set; } = new ID3D11ShaderResourceView[16];
+    public ID3D11SamplerState?[] SamplerStates { get; private set; } = new ID3D11SamplerState[16];
 
     public Shader(string fileName, string entryPoint, string compilationProfile)
     {

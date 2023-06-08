@@ -6,6 +6,15 @@ struct Box
 	float3 max;
 };
 
+struct Light
+{
+	float4x4 projection;
+	float3 position;
+	float3 normal;
+	float3 up;
+	float3 right;
+};
+
 struct FaceInfo
 {
 	float3 position;
@@ -22,6 +31,7 @@ cbuffer Constants
 	float3 sunDirection;
 	uint blockMeshAge;
 	float2 atlasTileSize;
+	uint lightCount;
 	uint3 blockDataSize;
 };
 
@@ -30,7 +40,7 @@ cbuffer Constants
 SamplerState pointSampler;
 
 // shader resources
-StructuredBuffer<Box> boxes : register(t0);
+StructuredBuffer<Light> lights : register(t0);
 StructuredBuffer<FaceInfo> faces : register(t1);
 Texture2D<unorm float4> atlas : register(t2);
 Texture3D<uint> blockData : register(t3);
@@ -51,13 +61,13 @@ struct Ray
 	}
 };
 
-Ray CreateRay(float3 origin, float3 direction)
+Ray CreateRay(float3 origin, float3 direction, float length)
 {
 	Ray result;
 	result.origin = origin;
 	result.direction = direction;
 	result.inverseDirection = 1 / direction;
-	result.length = 100;
+	result.length = length;
 	return result;
 }
 
@@ -112,7 +122,7 @@ float3 randomUnitVector(inout Random rand)
 
 // http://www.cs.yorku.ca/~amana/research/grid.pdf
 // https://stackoverflow.com/questions/12367071/how-do-i-initialize-the-t-variables-in-a-fast-voxel-traversal-algorithm-for-ray
-bool box_raycast(Ray ray, Box box, out float tNear, out float tFar)
+bool PartialBoxRaycast(Ray ray, Box box, out float tNear, out float tFar)
 {
 	float t1 = (box.min.x - ray.origin.x) * ray.inverseDirection.x;
 	float t2 = (box.max.x - ray.origin.x) * ray.inverseDirection.x;
@@ -152,7 +162,7 @@ bool raycast(Ray ray, out float outT, out float3 outNormal, out int3 outVoxel)
 	Box box;
 	box.min = float3(0, 0, 0);
 	box.max = float3(blockDataSize);
-	box_raycast(ray, box, tNear, tFar);
+	PartialBoxRaycast(ray, box, tNear, tFar);
 	
 	float3 start = ray.at(max(0, tNear));
 	float3 end = ray.at(tFar);
@@ -165,7 +175,7 @@ bool raycast(Ray ray, out float outT, out float3 outNormal, out int3 outVoxel)
 	
 	float t = 0;
 	
-	while (--dist)
+	while (--dist && t < ray.length)
 	{
 		if (voxel.x < 0 || voxel.x >= 16 || voxel.y < 0 || voxel.y >= 16 || voxel.z < 0 || voxel.z >= 16)
 		{
@@ -174,9 +184,9 @@ bool raycast(Ray ray, out float outT, out float3 outNormal, out int3 outVoxel)
 		
 		if (blockData[voxel.zxy] != 0)
 		{
-			outT = t;
+			outT = max(max(tMax.x - tDelta.x, tMax.y - tDelta.y), tMax.z - tDelta.z) * length(d);
 			outVoxel = voxel;
-			return true;
+			return t <= ray.length;
 		}
 		
 		if (tMax.x < tMax.y)
@@ -185,14 +195,12 @@ bool raycast(Ray ray, out float outT, out float3 outNormal, out int3 outVoxel)
 			{
 				voxel.x += step.x;
 				tMax.x += tDelta.x;
-				t += tDelta.x;
 				outNormal = float3(-step.x, 0, 0);
 			}
 			else
 			{
 				voxel.z += step.z;
 				tMax.z += tDelta.z;
-				t += tDelta.z;
 				outNormal = float3(0, 0, -step.z);
 			}
 		}
@@ -202,14 +210,12 @@ bool raycast(Ray ray, out float outT, out float3 outNormal, out int3 outVoxel)
 			{
 				voxel.y += step.y;
 				tMax.y += tDelta.y;
-				t += tDelta.y;
 				outNormal = float3(0, -step.y, 0);
 			}
 			else
 			{
 				voxel.z += step.z;
 				tMax.z += tDelta.z;
-				t += tDelta.z;
 				outNormal = float3(0, 0, -step.z);
 			}
 		}
@@ -239,69 +245,51 @@ float2 CalcFaceUV(int3 voxel, float3 pos, float3 normal)
 	return uv;
 }
 
-#define GLOWSTONE_STR_FLOAT .4
-#define GLOWSTONE_STR float3(GLOWSTONE_STR_FLOAT,GLOWSTONE_STR_FLOAT,GLOWSTONE_STR_FLOAT)
-
-float3 rayColor(Ray ray)
+float3 LightContribution(Light light, float3 pixelPos, float3 surfNormal)
 {
-	static const int bounces = 4;
+	// multiply by light's projection matrix to determine if we are in light's frustum
+	float4 clip = mul(light.projection, float4(pixelPos, 1));
 	
-	uint elements, stride;
-	boxes.GetDimensions(elements, stride);
+	if (abs(clip.x) >= clip.w || abs(clip.y) >= clip.w || abs(clip.z) >= clip.w)
+		return float3(0, 0, 0); // not in light frustum, no contribution
 	
-	static float3 emissions[bounces];
-	static float3 strengths[bounces];
+	// return float3(.5, .5, .5);
+	float3 lightPos = light.position + light.normal * .5 * (17.0/16.0);
 	
-	[fastopt] 
-	for (int i = 0; i < bounces-1; i++)
+	float dist = length(lightPos - pixelPos);
+	Ray ray = CreateRay(pixelPos, normalize(lightPos - pixelPos), dist);
+	
+	float t;
+	float3 hitNormal;
+	int3 voxel;
+	
+	if (!raycast(ray, t, hitNormal, voxel) || t > dist)
 	{
-		float t;
-		float3 normal;
-		int3 voxel;
-		if (raycast(ray, t, normal, voxel))
-		{
-			// determine face uv
-			float3 pos = ray.at(t);
-			
-			if (normal.x > 0 || normal.y > 0 || normal.z > 0)
-				voxel = int3(float3(voxel) - normal);
-			
-			float2 uv = CalcFaceUV(voxel, pos, normal);
-			uint id = blockData[voxel.zxy];
-			
-			float3 attenuation = atlas[int2(uv.x * 16, (uv.y + (id - 1)) * 16)];
-			
-			strengths[i] = float3(.5, .5, .5);// attenuation;
-			
-			if (id == 6)
-			{
-				emissions[i] = GLOWSTONE_STR;
-			}
-			else
-			{
-				emissions[i] = float3(0, 0, 0);
-			}
-		}
-		else
-		{
-			emissions[i] = max(0, dot(sunDirection, ray.direction)) * float3(0.56078434, 0.8509804, 0.91764706);
-			strengths[i] = float3(0, 0, 0);
-			break;
-		}
-		
-		ray = CreateRay(ray.at(t), normal + randomUnitVector(rng));
+		return (1 - dot(surfNormal, light.normal) * .5 + .5) * dot(ray.direction, surfNormal) * (.25 / (dist * dist));
+	}
+	else
+	{
+		return float3(0, 0, 0);
 	}
 	
-	float3 color = float3(1, 1, 1);
-	for (int j = bounces - 1; j >= 0; j--)
-	{
-		color *= strengths[j];
-		color += emissions[j];
-	}
-		
-	return color;
-}
+	
+	//float dist = length(lightPos - pixelPos);
+	//Ray ray1 = CreateRay(pixelPos, normalize((lightPos + light.up * .49) - pixelPos), dist);
+	//Ray ray2 = CreateRay(pixelPos, normalize((lightPos - light.up * .49) - pixelPos), dist);
+	//Ray ray3 = CreateRay(pixelPos, normalize((lightPos + light.right * .49) - pixelPos), dist);
+	//Ray ray4 = CreateRay(pixelPos, normalize((lightPos - light.right * .49) - pixelPos), dist);
+	
+	//float t;
+	//float3 hitNormal;
+	//int3 voxel;
+	
+	//float3 col1 = (!raycast(ray1, t, hitNormal, voxel) || t > dist) ? dot(surfNormal, ray1.direction) * (.2 / (dist * dist)) : float3(0, 0, 0);
+	//float3 col2 = (!raycast(ray2, t, hitNormal, voxel) || t > dist) ? dot(surfNormal, ray1.direction) * (.2 / (dist * dist)) : float3(0, 0, 0);
+	//float3 col3 = (!raycast(ray3, t, hitNormal, voxel) || t > dist) ? dot(surfNormal, ray1.direction) * (.2 / (dist * dist)) : float3(0, 0, 0);
+	//float3 col4 = (!raycast(ray4, t, hitNormal, voxel) || t > dist) ? dot(surfNormal, ray1.direction) * (.2 / (dist * dist)) : float3(0, 0, 0);
 
+	//return col1 + col2 + col3 + col4;
+}
 
 [numthreads(16, 16, 1)]
 void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, uint3 threadID : SV_GroupThreadID)
@@ -320,38 +308,43 @@ void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, ui
 	
 	float2 uv = threadID.xy / 16.0;
 	
-	Ray ray;
-	ray.origin = float3(.5, .5, .5) + face.position + .5 * (normal * 1.0001 - face.up * (uv.y * 2 - 1 + (rng.NextFloat() + .5) * (1.0 / 16.0)) - face.right * (uv.x * 2 - 1 + (rng.NextFloat() + .5) * (1.0 / 16.0)));
-	//ray.direction = normalize(reflect(normalize(ray.origin-camPos), normal));
-	ray.direction = normalize(normal + randomUnitVector(rng));
-	ray.inverseDirection = 1.0 / ray.direction;
-	ray.length = 100;
+	float3 pos = float3(.5, .5, .5) + face.position + .5 * (normal * 1.0001 - face.up * (uv.y * 2 - 1 + (1 / 32.0)) - face.right * (uv.x * 2 - 1 + (1 / 32.0)));
 	
-	float4 atlasColor = atlas[uint2(face.atlasLocationX, face.atlasLocationY) + uint2((uint) (uv.x * 16), (uint) (uv.y * 16))];
+	float3 pos1 = pos + face.up * (1 / 128.0) + face.right * (1 / 128.0);
+	float3 pos2 = pos - face.up * (1 / 128.0) - face.right * (1 / 128.0);
+	float3 pos3 = pos - face.up * (1 / 128.0) + face.right * (1 / 128.0);
+	float3 pos4 = pos + face.up * (1 / 128.0) - face.right * (1 / 128.0);
 	
-	int samples = 1000;
-	float4 col = float4(0, 0, 0, 0);
+	float3 atlasColor = atlas[uint2(face.atlasLocationX, face.atlasLocationY) + uint2((uint) (uv.x * 16), (uint) (uv.y * 16))].xyz;
 	
-	[fastopt] for (int i = 0; i < samples; i++)
+	float3 col = float3(0, 0, 0);
+	float3 ambient = float3(.01, .01, .01);
+	
+	float t;
+	float3 n;
+	int3 v;
+	Ray sunlightRay = CreateRay(pos, -sunDirection, 1000);
+	if (!raycast(sunlightRay, t, n, v))
 	{
-		//ray.direction = normalize(reflect(normalize(ray.origin-camPos), normal));
-		ray.origin = float3(.5, .5, .5) + face.position + .5 * (normal * 1.0001 - face.up * (uv.y * 2 - 1 + (rng.NextFloat() + .5) * (1.0 / 16.0)) - face.right * (uv.x * 2 - 1 + (rng.NextFloat() + .5) * (1.0 / 16.0)));
-		ray.direction = normalize(normal + randomUnitVector(rng));
-		ray.inverseDirection = 1.0 / ray.direction;
-		col += float4(atlasColor.xyz * rayColor(ray), 1);
-		if (face.atlasLocationY == 5*16)
-		{
-			//col += float4(GLOWSTONE_STR, 0);
-		}
+		col += .6 * max(0, dot(sunDirection, -normal));
 	}
 	
-	col.xyz /= float(samples);
+	col += ambient;
 	
-	col = max(float4(0, 0, 0, 0), min(float4(1, 1, 1, 1), col));
+	for (int i = 0; i < lightCount; i++)
+	{
+		Light l = lights[i];
+		col += LightContribution(l, pos1, normal);
+		col += LightContribution(l, pos2, normal);
+		col += LightContribution(l, pos3, normal);
+		col += LightContribution(l, pos4, normal);
+	}
 	
-	// (hitAny ? float4(.4, .4, .4, 1) : (.4 + .6 * max(0, dot(sunDirection, -normal))));
-	col = pow(col, 1/2.2);
+	col.xyz = min(col.xyz, float3(1, 1, 1));
+	
+	col *= atlasColor;
+	col.xyz = pow(col.xyz, 1/2.2);
 	
 	blockmeshFaces[dispatchID.xy] = float4(col.xyz, 1);
-	
+	// blockmeshFaces[dispatchID.xy] = float4(atlasColor, 1);
 }
