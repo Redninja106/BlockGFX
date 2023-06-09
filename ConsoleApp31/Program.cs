@@ -1,24 +1,11 @@
-﻿using ConsoleApp31;
-using ConsoleApp31.Drawing;
-using ConsoleApp31.Drawing.Materials;
-using ConsoleApp31.Extensions;
+﻿using ConsoleApp31.Drawing.Materials;
 using ConsoleApp31.GUI;
-using ConsoleApp31.Texturing;
 using GLFW;
-using Microsoft.VisualBasic;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Numerics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Threading;
-using Vortice;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
-using Vortice.Mathematics;
 
 class Program 
 { 

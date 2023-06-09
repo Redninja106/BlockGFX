@@ -9,8 +9,6 @@ struct Box
 struct Light
 {
 	float4x4 projection;
-	
-	// TODO: instead of reuploading this data, just upload a face index
 	float3 position;
 	float3 normal;
 	float3 up;
@@ -256,41 +254,50 @@ float3 LightContribution(Light light, float3 pixelPos, float3 surfNormal)
 		return float3(0, 0, 0); // not in light frustum, no contribution
 	
 	// return float3(.5, .5, .5);
-	float3 lightPos = light.position + light.normal * .5 * (17.0/16.0);
-	
-	float dist = length(lightPos - pixelPos);
-	Ray ray = CreateRay(pixelPos, normalize(lightPos - pixelPos), dist);
-	
-	float t;
-	float3 hitNormal;
-	int3 voxel;
-	
-	if (!raycast(ray, t, hitNormal, voxel) || t > dist)
-	{
-		return (1 - dot(surfNormal, light.normal) * .5 + .5) * dot(ray.direction, surfNormal) * (.25 / (dist * dist));
-	}
-	else
-	{
-		return float3(0, 0, 0);
-	}
-	
+	float3 lightPos = light.position + light.normal * .5 * (17.0 / 16.0);
 	
 	//float dist = length(lightPos - pixelPos);
-	//Ray ray1 = CreateRay(pixelPos, normalize((lightPos + light.up * .49) - pixelPos), dist);
-	//Ray ray2 = CreateRay(pixelPos, normalize((lightPos - light.up * .49) - pixelPos), dist);
-	//Ray ray3 = CreateRay(pixelPos, normalize((lightPos + light.right * .49) - pixelPos), dist);
-	//Ray ray4 = CreateRay(pixelPos, normalize((lightPos - light.right * .49) - pixelPos), dist);
+	//Ray ray = CreateRay(pixelPos, normalize(lightPos - pixelPos), dist);
 	
 	//float t;
 	//float3 hitNormal;
 	//int3 voxel;
 	
-	//float3 col1 = (!raycast(ray1, t, hitNormal, voxel) || t > dist) ? dot(surfNormal, ray1.direction) * (.2 / (dist * dist)) : float3(0, 0, 0);
-	//float3 col2 = (!raycast(ray2, t, hitNormal, voxel) || t > dist) ? dot(surfNormal, ray1.direction) * (.2 / (dist * dist)) : float3(0, 0, 0);
-	//float3 col3 = (!raycast(ray3, t, hitNormal, voxel) || t > dist) ? dot(surfNormal, ray1.direction) * (.2 / (dist * dist)) : float3(0, 0, 0);
-	//float3 col4 = (!raycast(ray4, t, hitNormal, voxel) || t > dist) ? dot(surfNormal, ray1.direction) * (.2 / (dist * dist)) : float3(0, 0, 0);
-
-	//return col1 + col2 + col3 + col4;
+	//if (!raycast(ray, t, hitNormal, voxel) || t > dist)
+	//{
+	//	return (1 - dot(surfNormal, light.normal) * .5 + .5) * dot(ray.direction, surfNormal) * (.25 / (dist * dist));
+	//}
+	//else
+	//{
+	//	return float3(0, 0, 0);
+	//}
+	
+	float3 lights[4] =
+	{
+		(lightPos + light.up * (7 / 16)),
+		(lightPos - light.up * (7 / 16)),
+		(lightPos + light.right * (7 / 16)),
+		(lightPos - light.right * (7 / 16))
+	};
+	
+	float3 color = float3(0, 0, 0);
+	for (int i = 0; i < 4; i++)
+	{
+		float3 lightPos = lights[i];
+		float dist = length(lightPos - pixelPos);
+		Ray ray = CreateRay(pixelPos, normalize(lightPos - pixelPos), dist);
+	
+		float t;
+		float3 hitNormal;
+		int3 voxel;
+	
+		if (!raycast(ray, t, hitNormal, voxel) || t > dist)
+		{
+			color = max(color, (1 - dot(surfNormal, light.normal) * .5 + .5) * dot(ray.direction, surfNormal) * (1 / (dist * dist)));
+		}
+	}
+	
+	return color;
 }
 
 [numthreads(16, 16, 1)]
