@@ -10,11 +10,11 @@ float4 main(VertexShaderOutput vsout) : SV_Target
 	uint width, height, numlevels;
 	faces.GetDimensions(0, width, height, numlevels);
 	
-	uint2 face = uint2(vsout.faceIndex * 16, 0);
+	uint2 face = uint2((vsout.faceIndex % 64) * 16, (vsout.faceIndex / 64) * 16);
 	face += uint2(vsout.localuv * 16);
 	
 	float2 size = float2(width, height);
-	float2 facesUV = ((float2(vsout.faceIndex, 0) + vsout.localuv) * 16) / size;
+	float2 facesUV = ((float2((vsout.faceIndex % 64), (vsout.faceIndex / 64)) + vsout.localuv) * 16) / size;
 	
 	float3 lightingColor = faces.Sample(pointSampler, facesUV).xyz;
 	// float3 atlasColor = textureAtlas.Sample(pointSampler, vsout.uv).xyz;

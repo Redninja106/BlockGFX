@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Numerics;
+using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
@@ -277,8 +278,8 @@ class BlockMesh : IDisposable
 
         if (faceInfos.Length != 0)
         {
-            //faces = new(16 * Math.Min(64, faceInfos.Length), 16 * (int)Math.Ceiling(faceInfos.Length/64.0), Format.R8G8B8A8_UNorm, Format.R8G8B8A8_Typeless);
-            faces = new(16 * faceInfos.Length, 16, Format.R8G8B8A8_UNorm, Format.R8G8B8A8_Typeless);
+            faces = new(16 * Math.Min(64, faceInfos.Length), 16 * (faceInfos.Length/64 + 1), Format.R8G8B8A8_UNorm, Format.R8G8B8A8_Typeless);
+            // faces = new(16 * faceInfos.Length, 16, Format.R8G8B8A8_UNorm, Format.R8G8B8A8_Typeless);
         }
     }
 

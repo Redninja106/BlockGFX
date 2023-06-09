@@ -208,7 +208,7 @@ class BlockChunkRenderer
         this.raytracingShader.UnorderedAccessViews[0] = chunk.Mesh.faces!.UnorderedAccessView;
 
         context.SetComputeShader(this.raytracingShader);
-        context.Dispatch(chunk.Mesh.faces.Width / 16, 1, 1);
+        context.Dispatch(chunk.Mesh.faces.Width / 16, chunk.Mesh.faces.Height / 16, 1);
         context.CSSetUnorderedAccessView(0, null);
 
         // do the color pass

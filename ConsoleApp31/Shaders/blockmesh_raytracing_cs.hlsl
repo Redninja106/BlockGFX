@@ -9,6 +9,8 @@ struct Box
 struct Light
 {
 	float4x4 projection;
+	
+	// TODO: instead of reuploading this data, just upload a face index
 	float3 position;
 	float3 normal;
 	float3 up;
@@ -298,15 +300,15 @@ void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, ui
 	rng.Cycle();
 	
 	float4 prevCol = blockmeshFaces[dispatchID.xy];
-
+	
 	if (prevCol.a == 0)
 		return;
 	
-	FaceInfo face = faces[groupID.x];
+	FaceInfo face = faces[groupID.x + groupID.y * 64];
 	
 	float3 normal = cross(face.up, face.right);
 	
-	float2 uv = threadID.xy / 16.0;
+	float2 uv = float2(threadID.xy) / 16.0;
 	
 	float3 pos = float3(.5, .5, .5) + face.position + .5 * (normal * 1.0001 - face.up * (uv.y * 2 - 1 + (1 / 32.0)) - face.right * (uv.x * 2 - 1 + (1 / 32.0)));
 	
