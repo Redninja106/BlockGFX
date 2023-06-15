@@ -20,11 +20,10 @@ internal class BlockChunk : IGameComponent, IDisposable
     public const int Width = 16, Height = 16, Depth = 16;
 
     public Transform Transform = new();
-    readonly BlockData[] blocks = new BlockData[Width * Height * Depth];
+    public readonly BlockData[] blocks = new BlockData[Width * Height * Depth];
     readonly BlockChunkManager manager;
     public ChunkCollider Collider;
     public Volume blockVolume;
-    public Volume uvVolume;
     public BlockMesh Mesh { get; set; }
 
     public ChunkCoordinate location;
@@ -38,11 +37,11 @@ internal class BlockChunk : IGameComponent, IDisposable
 
         this.manager = manager;
 
-        for (int y = 0; y < Height; y++)
+        for (int z = 0; z < Depth; z++)
         {
-            for (int x = 0; x < Width; x++)
+            for (int y = 0; y < Height; y++)
             {
-                for (int z = 0; z < Depth; z++)
+                for (int x = 0; x < Width; x++)
                 {
                     var coords = new BlockCoordinate(x, y, z) + location.ToBlockCoordinate();
 
@@ -73,9 +72,8 @@ internal class BlockChunk : IGameComponent, IDisposable
         var builder = new BlockMeshBuilder(this.manager.TextureAtlas, this.manager);
         Mesh = builder.BuildMesh(this, Width, Height, Depth);
         var bbBuilder = new BlockBoundingBoxBuilder();
-        this.Collider = new(this.location, this.blocks, bbBuilder.Build(this, 16,16,16));
-        blockVolume = new(Width, Height, Depth, Format.R32_UInt);
-        blockVolume.Update<BlockData>(this.blocks);
+        this.Collider = new(this.location, this.blocks, bbBuilder.Build(this, 16, 16, 16));
+        manager.BlockVolume.UpdateChunk(this.location, this.blocks);
     }
 
     public ref BlockData this[int index]
@@ -90,7 +88,7 @@ internal class BlockChunk : IGameComponent, IDisposable
             // if (!IndexInBounds(x, y, z))
             //     throw new IndexOutOfRangeException();
 
-            return ref blocks[y * Width * Depth + x * Depth + z]; 
+            return ref blocks[z * Width * Height + y * Width + x]; 
         }
     }
     public ref BlockData this[BlockCoordinate worldCoordinate]

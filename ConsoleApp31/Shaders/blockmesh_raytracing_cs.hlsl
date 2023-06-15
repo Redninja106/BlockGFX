@@ -13,6 +13,10 @@ struct Light
 	float3 normal;
 	float3 up;
 	float3 right;
+	float3 color;
+	float exponentialFalloff;
+	float linearFalloff;
+	float constantFalloff;
 };
 
 struct FaceInfo
@@ -33,6 +37,7 @@ cbuffer Constants
 	float2 atlasTileSize;
 	uint lightCount;
 	uint3 blockDataSize;
+	int3 chunkPos;
 };
 
 
@@ -43,7 +48,7 @@ SamplerState pointSampler;
 StructuredBuffer<Light> lights : register(t0);
 StructuredBuffer<FaceInfo> faces : register(t1);
 Texture2D<unorm float4> atlas : register(t2);
-Texture3D<uint> blockData : register(t3);
+Texture3D<uint4> blockData : register(t3);
 
 // uavs
 RWTexture2D<unorm float4> blockmeshFaces;
@@ -147,10 +152,11 @@ float3 getMax(float3 start, float3 step)
 	return float3(
 		step.x > 0 ? 1 - frac(start.x) : frac(start.x),
 		step.y > 0 ? 1 - frac(start.y) : frac(start.y),
-		step.z > 0 ? 1 - frac(start.z) : frac(start.z));
+		step.z > 0 ? 1 - frac(start.z) : frac(start.z)
+	);
 }
 
-bool raycast(Ray ray, out float outT, out float3 outNormal, out int3 outVoxel)
+bool raycast(Texture3D<uint4> volume, Ray ray, out float outT, out float3 outNormal, out int3 outVoxel)
 {
 	int3 voxel = int3(floor(ray.origin));
 	int3 step = sign(ray.direction);
@@ -162,7 +168,8 @@ bool raycast(Ray ray, out float outT, out float3 outNormal, out int3 outVoxel)
 	Box box;
 	box.min = float3(0, 0, 0);
 	box.max = float3(blockDataSize);
-	PartialBoxRaycast(ray, box, tNear, tFar);
+	if (!PartialBoxRaycast(ray, box, tNear, tFar))
+		return false;
 	
 	float3 start = ray.at(max(0, tNear));
 	float3 end = ray.at(tFar);
@@ -175,14 +182,15 @@ bool raycast(Ray ray, out float outT, out float3 outNormal, out int3 outVoxel)
 	
 	float t = 0;
 	
+	[fastopt]
 	while (--dist && t < ray.length)
 	{
-		if (voxel.x < 0 || voxel.x >= 16 || voxel.y < 0 || voxel.y >= 16 || voxel.z < 0 || voxel.z >= 16)
+		if (voxel.x < 0 || voxel.x >= blockDataSize.x || voxel.y < 0 || voxel.y >= blockDataSize.y || voxel.z < 0 || voxel.z >= blockDataSize.z)
 		{
 			return false;
 		}
 		
-		if (blockData[voxel.zxy] != 0)
+		if (volume[voxel].x != 0)
 		{
 			outT = max(max(tMax.x - tDelta.x, tMax.y - tDelta.y), tMax.z - tDelta.z) * length(d);
 			outVoxel = voxel;
@@ -274,26 +282,26 @@ float3 LightContribution(Light light, float3 pixelPos, float3 surfNormal)
 	
 	float3 lights[4] =
 	{
-		(lightPos + light.up * (7 / 16)),
-		(lightPos - light.up * (7 / 16)),
-		(lightPos + light.right * (7 / 16)),
-		(lightPos - light.right * (7 / 16))
+		(lightPos + light.up * (7.0 / 16.0)),
+		(lightPos - light.up * (7.0 / 16.0)),
+		(lightPos + light.right * (7.0 / 16.0)),
+		(lightPos - light.right * (7.0 / 16.0))
 	};
 	
 	float3 color = float3(0, 0, 0);
 	for (int i = 0; i < 4; i++)
 	{
 		float3 lightPos = lights[i];
-		float dist = length(lightPos - pixelPos);
+		float dist = length((lightPos - pixelPos));
 		Ray ray = CreateRay(pixelPos, normalize(lightPos - pixelPos), dist);
 	
 		float t;
 		float3 hitNormal;
 		int3 voxel;
 	
-		if (!raycast(ray, t, hitNormal, voxel) || t > dist)
+		if (!raycast(blockData, ray, t, hitNormal, voxel) || t > dist)
 		{
-			color = max(color, (1 - dot(surfNormal, light.normal) * .5 + .5) * dot(ray.direction, surfNormal) * (1 / (dist * dist)));
+			color = max(color, (1 - dot(surfNormal, light.normal) * .5 + .5) * dot(ray.direction, surfNormal) * (1.0 / (light.constantFalloff + light.linearFalloff * dist + light.constantFalloff * dist * dist)));
 		}
 	}
 	
@@ -317,7 +325,7 @@ void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, ui
 	
 	float2 uv = float2(threadID.xy) / 16.0;
 	
-	float3 pos = float3(.5, .5, .5) + face.position + .5 * (normal * 1.0001 - face.up * (uv.y * 2 - 1 + (1 / 32.0)) - face.right * (uv.x * 2 - 1 + (1 / 32.0)));
+	float3 pos = chunkPos * 16 + float3(.5, .5, .5) + face.position + .5 * (normal * 1.0001 - face.up * (uv.y * 2 - 1 + (1 / 32.0)) - face.right * (uv.x * 2 - 1 + (1 / 32.0)));
 	
 	float3 pos1 = pos + face.up * (1 / 128.0) + face.right * (1 / 128.0);
 	float3 pos2 = pos - face.up * (1 / 128.0) - face.right * (1 / 128.0);
@@ -333,7 +341,7 @@ void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, ui
 	float3 n;
 	int3 v;
 	Ray sunlightRay = CreateRay(pos, -sunDirection, 1000);
-	if (!raycast(sunlightRay, t, n, v))
+	if (!raycast(blockData, sunlightRay, t, n, v))
 	{
 		col += .6 * max(0, dot(sunDirection, -normal));
 	}
@@ -355,5 +363,4 @@ void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, ui
 	col.xyz = pow(col.xyz, 1/2.2);
 	
 	blockmeshFaces[dispatchID.xy] = float4(col.xyz, 1);
-	// blockmeshFaces[dispatchID.xy] = float4(atlasColor, 1);
 }

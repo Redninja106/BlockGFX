@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
@@ -89,17 +90,8 @@ internal static class Graphics
 
     public static void Present()
     {
-        try
-        {
-            var hr = SwapChain.Present(SwapInterval, PresentFlags.None, new());
-            hr.CheckError();
-        }
-        catch (SharpGenException ex)
-        {
-            Console.WriteLine(ex);
-            Console.ReadLine();
-            Console.WriteLine(Device.DeviceRemovedReason.ApiCode);
-        }
+        var hr = SwapChain.Present(SwapInterval, PresentFlags.None, new());
+        hr.CheckError();
     }
 
     public static void Resize(int width, int height)
@@ -135,5 +127,10 @@ internal static class Graphics
         ImmediateContext?.Dispose();
         Debug?.Dispose();
         Device?.Dispose();
+    }
+
+    public static void CheckFeatureSupport()
+    {
+        Console.WriteLine(Device.CheckFeatureOptions2().TiledResourcesTier);
     }
 }

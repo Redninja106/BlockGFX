@@ -10,13 +10,13 @@ internal class BlockBoundingBoxBuilder
     {
         List<Box> result = new();
 
-        for (int y = 0; y < height; y++)
+        for (int z = 0; z < depth; z++)
         {
-            for (int x = 0; x < width; x++)
+            for (int y = 0; y < height; y++)
             {
-                for (int z = 0; z < depth; z++)
+                for (int x = 0; x < width; x++)
                 {
-                    if (!chunk[y * width * depth + x * depth + z].IsTransparent)
+                    if (!chunk[z * width * height + y * width + x].IsTransparent)
                     {
                         result.Add(new(new(x, y, z), new(x + 1, y + 1, z + 1)));
                     }

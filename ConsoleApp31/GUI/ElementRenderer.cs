@@ -35,7 +35,12 @@ internal class ElementRenderer
         blendState = Graphics.Device.CreateBlendState(desc);
     }
 
-    public void DrawTexture(Rectangle src, Rectangle dest, ImageTexture texture)
+    public void DrawTexture(Rectangle src, Rectangle dest, ImageTexture image)
+    {
+        DrawTexture(src, dest, image.ShaderResourceView);
+    }
+
+    public void DrawTexture(Rectangle src, Rectangle dest, ID3D11ShaderResourceView imageView)
     {
         dataBuffer.Update(new()
         {
@@ -50,7 +55,7 @@ internal class ElementRenderer
         context.SetVertexShader(guiVertexShader);
 
         guiPixelShader.SamplerStates[0] = sampler.State;
-        guiPixelShader.ResourceViews[0] = texture.ShaderResourceView;
+        guiPixelShader.ResourceViews[0] = imageView;
         context.SetPixelShader(guiPixelShader);
         
         context.SetVertexBuffer(quadBuffer);

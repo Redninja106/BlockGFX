@@ -63,8 +63,8 @@ internal struct Box : ICollidable
         float t5 = (min.Z - ray.origin.Z) * ray.inverseDirection.Z;
         float t6 = (max.Z - ray.origin.Z) * ray.inverseDirection.Z;
 
-        tNear = MathF.Max(MathF.Max(MathF.Min(t1, t2), MathF.Min(t3, t4)), MathF.Min(t5, t6));
-        tFar = MathF.Min(MathF.Min(MathF.Max(t1, t2), MathF.Max(t3, t4)), MathF.Max(t5, t6));
+        tNear = Max(Max(Min(t1, t2), Min(t3, t4)), Min(t5, t6));
+        tFar = Min(Min(Max(t1, t2), Max(t3, t4)), Max(t5, t6));
 
         if (tNear <= tFar && tFar > 0 && tNear < ray.length)
         {
@@ -72,6 +72,20 @@ internal struct Box : ICollidable
         }
 
         return false;
+
+        float Min(float a, float b)
+        {
+            if (float.IsNaN(a)) return b;
+            if (float.IsNaN(b)) return a;
+            return MathF.Min(a, b);
+        }
+
+        float Max(float a, float b)
+        {
+            if (float.IsNaN(a)) return b;
+            if (float.IsNaN(b)) return a;
+            return MathF.Max(a, b);
+        }
     }
 
     public bool Intersect(Box other, out Box overlap)

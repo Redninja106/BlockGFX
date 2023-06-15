@@ -11,8 +11,10 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using Vortice;
 using Vortice.Direct3D11;
 using Vortice.Mathematics;
+using static BlockMeshTiledVolume;
 
 namespace ConsoleApp31;
 internal class BlockChunkManager : IGameComponent, ICollidable
@@ -20,6 +22,7 @@ internal class BlockChunkManager : IGameComponent, ICollidable
     public ChunkMaterial SharedMaterial { get; }
     public Dictionary<ChunkCoordinate, BlockChunk> Chunks { get; } = new();
     public TextureAtlas TextureAtlas { get; }
+    public BlockMeshTiledVolume BlockVolume { get; }
 
     public BlockChunkManager()
     {
@@ -49,8 +52,10 @@ internal class BlockChunkManager : IGameComponent, ICollidable
         atlasBuilder.AddBlock(new(6), glowstoneFaces);
 
         TextureAtlas = atlasBuilder.Finish();
+        BlockVolume = new();
 
         AddChunk(new(0, 0, 0));
+        AddChunk(new(0, 0, 1));
     }
 
     public void Render(Camera camera)
@@ -173,12 +178,12 @@ internal class BlockChunkManager : IGameComponent, ICollidable
 
         foreach (var collider in colliders)
         {
-            if (collider is not null && collider.Raycast2(ray, out var lastHit) && lastHit.T < hit.T)
+            if (collider is not null && collider.Raycast2(ray, out var lastHit))
             {
+                ray.length = lastHit.T;
                 hit = lastHit;
             }
         }
-
         return hit.Hit;
     }
 
@@ -190,11 +195,12 @@ internal class BlockChunkManager : IGameComponent, ICollidable
         var baseLocation = location.ToChunkCoordinate();
 
         int index = 0;
-        for (int y = -1; y <= 1; y++)
+
+        for (int z = -1; z <= 1; z++)
         {
-            for (int x = -1; x <= 1; x++)
+            for (int y = -1; y <= 1; y++)
             {
-                for (int z = -1; z <= 1; z++)
+                for (int x = -1; x <= 1; x++)
                 {
                     var chunkLocation = new ChunkCoordinate(baseLocation.X + x, baseLocation.Y + y, baseLocation.Z + z);
 
@@ -267,6 +273,7 @@ class ChunkCollider : ICollidable
     private BlockData[] blocks;
     public ChunkCollider(ChunkCoordinate location, BlockData[] blocks, List<Box> colliders)
     {
+        this.location = location;
         this.globalOffset = -location.ToBlockCoordinate().ToVector3();
         this.colliders = colliders;
         this.blocks = blocks;
@@ -279,10 +286,9 @@ class ChunkCollider : ICollidable
         box.min += globalOffset;
         box.max += globalOffset;
 
-        var pos = location.ToBlockCoordinate().ToVector3();
-        var chunkCollider = new Box(pos, pos + Vector3.One * 16);
+        var localChunkCollider = new Box(Vector3.Zero, BlockChunk.SizeVector);
 
-        if (!chunkCollider.Intersect(box, out _))
+        if (!localChunkCollider.Intersect(box, out _))
         {
             overlap = default;
             return false;
@@ -329,28 +335,34 @@ class ChunkCollider : ICollidable
 
     public bool Raycast2(Ray ray, out RaycastHit hit)
     {
-        hit = default;
+        if (ray.direction.X is 0)
+            ray.inverseDirection.X = float.Epsilon;
+        if (ray.direction.Y is 0)
+            ray.inverseDirection.Y = float.Epsilon;
+        if (ray.direction.Z is 0)
+            ray.inverseDirection.Z = float.Epsilon;
 
-        // ray.origin -= Vector3.One * .5f;
+        hit = RaycastHit.NoHit;
 
-        ray.direction = ray.direction.Normalized();
-
-        Vector3 voxel = new((int)MathF.Floor(ray.origin.X), (int)MathF.Floor(ray.origin.Y), (int)MathF.Floor(ray.origin.Z));
-        Vector3 step = new(MathF.Sign(ray.direction.X), MathF.Sign(ray.direction.Y), MathF.Sign(ray.direction.Z));
-
-        if (step.LengthSquared() == 0)
-            return false;
-
-        float tNear, tFar;
         Box box;
-        box.min = new Vector3(0, 0, 0);
-        box.max = new Vector3(16, 16, 16);
+        box.min = this.location.ToBlockCoordinate().ToVector3();
+        box.max = box.min + new Vector3(15.9999f, 15.9999f, 15.9999f);
+        float tNear, tFar;
         box.PartialRaycast(ray, out tNear, out tFar);
+
+        ray.origin += this.globalOffset;
 
         Vector3 start = ray.At(MathF.Max(0, tNear));
         Vector3 end = ray.At(tFar);
 
         Vector3 d = end - start;
+
+        Vector3 step = new(MathF.Sign(d.X), MathF.Sign(d.Y), MathF.Sign(d.Z));
+
+        if (step.LengthSquared() == 0)
+            return false;
+
+        Vector3 voxel = new((int)MathF.Floor(start.X), (int)MathF.Floor(start.Y), (int)MathF.Floor(start.Z));
 
         Vector3 tDelta = step / d;
 
@@ -364,10 +376,66 @@ class ChunkCollider : ICollidable
                 return f - MathF.Floor(f);
         }
         
-        Vector3 normal;
+        Vector3 normal = Vector3.Zero;
 
         while (true)
         {
+            if (voxel.X < 0 || voxel.X >= 16 || voxel.Y < 0 || voxel.Y >= 16 || voxel.Z < 0 || voxel.Z >= 16)
+            {
+                return false;
+            }
+
+            if (!blocks[(int)(voxel.Z * 16 * 16 + voxel.Y * 16 + voxel.X)].IsTransparent)
+            {
+                voxel -= globalOffset;
+                float tx = tMax.X - tDelta.X, ty = tMax.Y - tDelta.Y, tz = tMax.Z - tDelta.Z;
+
+                float t; // = MathF.Max(MathF.Max(t, tMax.Y - tDelta.Y), tMax.Z - tDelta.Z);
+
+                if (tx > ty)
+                {
+                    if (tx > tz)
+                    {
+                        normal = new(-step.X, 0, 0);
+                        t = tx;
+                    }
+                    else
+                    {
+                        normal = new(0, 0, -step.Z);
+                        t = tz;
+                    }
+                }
+                else
+                {
+                    if (ty > tz)
+                    {
+                        normal = new(0, -step.Y, 0);
+                        t = ty;
+                    }
+                    else
+                    {
+                        normal = new(0, 0, -step.Z);
+                        t = tz;
+                    }
+                }
+
+
+
+
+                t *= d.Length();
+                t += MathF.Max(0, tNear);
+
+                if (t > 0 && t <= ray.length)
+                {
+                    hit = new(t, normal, new(voxel, voxel + Vector3.One));
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
             if (step.X is not 0 && tMax.X < tMax.Y)
             {
                 if (step.X is not 0 && tMax.X < tMax.Z)
@@ -398,20 +466,6 @@ class ChunkCollider : ICollidable
                     normal = Vector3.UnitZ * -step.Z;
                 }
             }
-
-            if (voxel.X < 0 || voxel.X >= 16 || voxel.Y < 0 || voxel.Y >= 16 || voxel.Z < 0 || voxel.Z >= 16)
-            {
-                return false;
-            }
-
-            if (!blocks[(int)(voxel.Y * 16 * 16 + voxel.X * 16 + voxel.Z)].IsTransparent)
-            {
-                hit = new(0, normal, new(voxel, voxel + Vector3.One));
-
-
-                return true;
-            }
-
         }
 
         // return voxel.X < 0 || voxel.X >= 16 || voxel.Y < 0 || voxel.Y >= 16 || voxel.Z < 0 || voxel.Z >= 16;
@@ -471,12 +525,14 @@ readonly record struct RaycastHit
 readonly struct RentedArray<T> : IDisposable, IEnumerable<T>
 {
     private readonly T[] elements;
+    private readonly int length;
 
-    public int Length => elements.Length;
+    public int Length => length;
 
-    public RentedArray(int minimumLength)
+    public RentedArray(int length)
     {
-        elements = ArrayPool<T>.Shared.Rent(minimumLength);
+        this.elements = ArrayPool<T>.Shared.Rent(length);
+        this.length = length;
     }
 
     public void Return(bool clearArray = false)
@@ -500,12 +556,24 @@ readonly struct RentedArray<T> : IDisposable, IEnumerable<T>
         if (newMinimumLength < array.Length)
         {
             // shrinking
+        }
 
+        throw new NotImplementedException();
+    }
+
+    public IEnumerator<T> NonNull()
+    {
+        foreach (var element in elements)
+        {
+            if (element is not null)
+            {
+                yield return element;
+            }
         }
     }
 
-    public IEnumerator<T> GetEnumerator() => (elements as IEnumerable<T>).GetEnumerator();
+    public IEnumerator<T> GetEnumerator() => new ArraySegment<T>(this.elements).GetEnumerator();
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-    public readonly Span<T> AsSpan() => this.elements.AsSpan();
+    public readonly Span<T> AsSpan() => this.elements.AsSpan(0, this.length);
     public ref T this[int index] => ref this.elements[index];
 }

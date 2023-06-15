@@ -127,7 +127,7 @@ internal class BlockMeshBuilder
             if (BlockChunkManager.TryGetBlock(blockCoord.OffsetBy(new(right)), out block))
                 rightTransparent = block.IsTransparent;
 
-            var l = Light.CreateForFace(pos, normal, up, right, topTransparent, bottomTransparent, leftTransparent, rightTransparent);
+            var l = Light.CreateForFace(Vector3.One, new(1.8f,.7f,1), pos, normal, up, right, topTransparent, bottomTransparent, leftTransparent, rightTransparent);
             this.lights.Add(l);
         }
 
@@ -207,6 +207,8 @@ struct Light
     public Vector3 normal;
     public Vector3 up;
     public Vector3 right;
+    public Vector3 color;
+    public LightFalloff falloff;
 
     public bool Test(Vector3 position)
     {
@@ -214,7 +216,7 @@ struct Light
         return MathF.Abs(clip.X) <= clip.W && MathF.Abs(clip.Y) <= clip.W && MathF.Abs(clip.Z) <= clip.W;
     }
 
-    public static Light CreateForFace(Vector3 facePosition, Vector3 faceNormal, Vector3 faceUp, Vector3 faceRight, bool topTransparent, bool bottomTransparent, bool leftTransparent, bool rightTransparent)
+    public static Light CreateForFace(Vector3 color, LightFalloff falloff, Vector3 facePosition, Vector3 faceNormal, Vector3 faceUp, Vector3 faceRight, bool topTransparent, bool bottomTransparent, bool leftTransparent, bool rightTransparent)
     {
         float near = 0.001f;
         float far = 100f;
@@ -234,7 +236,23 @@ struct Light
             normal = faceNormal,
             up = faceUp,
             right = faceRight,
+            falloff = falloff,
+            color = color,
         };
+    }
+}
+
+struct LightFalloff
+{
+    public float exponential;
+    public float linear;
+    public float constant;
+
+    public LightFalloff(float exponential, float linear, float constant)
+    {
+        this.exponential = exponential;
+        this.linear = linear;
+        this.constant = constant;
     }
 }
 
@@ -251,6 +269,8 @@ class BlockMesh : IDisposable
     // highest bit of the alpha channel is visiblity flag from first rasterizer pass
     public UnorderedAccessTexture? faces;
     public uint age;
+
+    public bool HasFaces => faces is not null;
 
     public BlockMesh(Span<BlockVertex> vertices, Span<uint> indices, List<Light> lights, FaceInfo[] faceInfos)
     {
