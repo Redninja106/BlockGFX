@@ -262,7 +262,7 @@ class BlockMesh : IDisposable
 
     public IndexBuffer indexBuffer;
 
-    public StructuredBuffer<FaceInfo> faceInfos;
+    public StructuredBuffer<FaceInfo>? faceInfos;
     public StructuredBuffer<Light>? lightBuffer;
     public List<Light> lights;
 
@@ -294,7 +294,10 @@ class BlockMesh : IDisposable
             this.lightBuffer = new(l);
         }
 
-        this.faceInfos = new(faceInfos);
+        if (faceInfos.Length > 0)
+        {
+            this.faceInfos = new(faceInfos);
+        }
 
         if (faceInfos.Length != 0)
         {

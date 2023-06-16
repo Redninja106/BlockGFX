@@ -210,6 +210,10 @@ struct RaytracingConstants
     public int chunkX;
     public int chunkY;
     public int chunkZ;
+    private int _pad5;
+    public int worldOriginX;
+    public int worldOriginY;
+    public int worldOriginZ;
 }
 
 struct FaceInfo

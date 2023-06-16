@@ -58,6 +58,9 @@ class BlockMeshRenderer
         raytracingShader.ConstantBuffers[0] = rtConsts.InternalBuffer;
     }
 
+    float t;
+    bool sunMoving;
+
     public void Render()
     {
         var context = Graphics.ImmediateContext;
@@ -89,6 +92,9 @@ class BlockMeshRenderer
 
         foreach (var chunk in chunks)
         {
+            if (!chunk.Mesh.HasFaces)
+                continue;
+
             depthOnlyMaterial.RenderSetup(context, Program.Camera, chunk.Transform.GetMatrix());
             chunk.Mesh.InvokeDraw(context);
         }
@@ -99,8 +105,11 @@ class BlockMeshRenderer
         // do the face index pass
         foreach (var chunk in chunks)
         {
+            if (!chunk.Mesh.HasFaces)
+                continue;
+
             context.OMSetRenderTargets(renderTargetView: Graphics.RenderTargetView, depthStencilTarget.DepthStencilView);
-            context.OMSetUnorderedAccessView(1, chunk.Mesh.faces!.UnorderedAccessView);
+            context.OMSetUnorderedAccessView(1, chunk.Mesh.faces?.UnorderedAccessView!);
             faceVisibilityMaterial.RenderSetup(context, Program.Camera, chunk.Transform.GetMatrix());
             chunk.Mesh.InvokeDraw(context);
         }
@@ -109,13 +118,21 @@ class BlockMeshRenderer
 
         // dispatch raytracing compute shader 
 
+        if (Input.IsKeyPressed(Keys.R))
+            sunMoving = !sunMoving;
+        if (sunMoving)
+            t += Program.time - Program.lastTime;
+
         foreach (var chunk in chunks)
         {
+            if (!chunk.Mesh.HasFaces)
+                continue;
+
             rtConsts.Update(new()
             {
                 ticks = (uint)Program.stopwatch!.ElapsedTicks,
                 camPos = Program.Camera.Transform.Position,
-                sunDirection = Vector3.Normalize(new(MathF.Cos(Program.time * .75f + MathF.PI / 2), MathF.Sin(Program.time * .75f + MathF.PI / 2), .5f)),
+                sunDirection = Vector3.Normalize(new(MathF.Cos(t * .75f + MathF.PI / 2), MathF.Sin(t * .75f + MathF.PI / 2), .5f)),
                 age = chunk.Mesh.age,
                 atlasTileSize = new(16f / chunkManager.TextureAtlas.Texture.Width, 16f / chunkManager.TextureAtlas.Texture.Height),
                 chunkWidth = 2048,
@@ -125,11 +142,15 @@ class BlockMeshRenderer
                 chunkX = chunk.location.X,
                 chunkY = chunk.location.Y,
                 chunkZ = chunk.location.Z,
+                worldOriginX = chunkManager.BlockVolume.Origin.X,
+                worldOriginY = chunkManager.BlockVolume.Origin.Y,
+                worldOriginZ = chunkManager.BlockVolume.Origin.Z,
             });
 
             this.raytracingShader.SamplerStates[0] = colorMaterial.Sampler.State;
+
             this.raytracingShader.ResourceViews[0] = chunk.Mesh.lightBuffer?.ShaderResourceView;
-            this.raytracingShader.ResourceViews[1] = chunk.Mesh.faceInfos.ShaderResourceView;
+            this.raytracingShader.ResourceViews[1] = chunk.Mesh.faceInfos?.ShaderResourceView;
             this.raytracingShader.ResourceViews[2] = chunkManager.TextureAtlas.Texture.ShaderResourceView;
             this.raytracingShader.ResourceViews[3] = chunkManager.BlockVolume.ShaderResourceView;
 
@@ -143,6 +164,9 @@ class BlockMeshRenderer
         // do the color pass
         foreach (var chunk in chunks)
         {
+            if (!chunk.Mesh.HasFaces)
+                continue;
+
             context.OMSetRenderTargets(Graphics.RenderTargetView, depthStencilTarget.DepthStencilView);
             colorMaterial.PixelShader!.ResourceViews[1] = chunk.Mesh.faces!.ShaderResourceView;
             colorMaterial.RenderSetup(context, Program.Camera, chunk.Transform.GetMatrix());
@@ -153,7 +177,7 @@ class BlockMeshRenderer
 
 
 /// <summary>
-/// Maintains a tiled volume texture of the world's block data, used in shaders for raycasting against
+/// Maintains a tiled volume texture of the world's block data, used in shaders for raycasting.
 /// </summary>
 class BlockMeshTiledVolume
 {
@@ -162,24 +186,16 @@ class BlockMeshTiledVolume
     public readonly ID3D11ShaderResourceView ShaderResourceView;
     public readonly ID3D11Texture3D1 volume;
     private readonly TilePool tilePool;
-    private readonly int[,,] mappedTiles;
+    private readonly Dictionary<ChunkCoordinate, int> mappedTiles;
+
+    public ChunkCoordinate Origin { get; }
 
     public BlockMeshTiledVolume()
     {
         tilePool = new(16);
-        var mappedTilesSize = ID3D11Resource.MaximumTexture3DSize / 16;
-        mappedTiles = new int[mappedTilesSize, mappedTilesSize, mappedTilesSize];
+        mappedTiles = new();
 
-        for (int i = 0; i < mappedTilesSize; i++)
-        {
-            for (int j = 0; j < mappedTilesSize; j++)
-            {
-                for (int k = 0; k < mappedTilesSize; k++)
-                {
-                    mappedTiles[i, j, k] = -1;
-                }
-            }
-        }
+        Origin = new(64, 64, 64);
 
         Texture3DDescription1 desc = new()
         {
@@ -213,11 +229,12 @@ class BlockMeshTiledVolume
 
     public void MapChunk(ChunkCoordinate location)
     {
-        TiledResourceCoordinate resourceCoordinate = new(location.X, location.Y, location.Z, 0);
+        var resourceLocation = Origin.OffsetBy(location);
+        TiledResourceCoordinate resourceCoordinate = new(resourceLocation.X, resourceLocation.Y, resourceLocation.Z, 0);
         TileRegionSize size = new(1);
 
         var tile = tilePool.NextTile();
-        mappedTiles[location.X, location.Y, location.Z] = tile;
+        mappedTiles[location] = tile;
 
         var hr = Graphics.ImmediateContext.UpdateTileMappings(
             volume,
@@ -236,16 +253,16 @@ class BlockMeshTiledVolume
 
     public bool IsMapped(ChunkCoordinate location)
     {
-        return mappedTiles[location.X, location.Y, location.Z] != -1;
+        return mappedTiles.ContainsKey(location);
     }
 
     public void UnmapChunk(ChunkCoordinate location)
     {
-        TiledResourceCoordinate resourceCoordinate = new(location.X, location.Y, location.Z, 0);
+        var resourceLocation = Origin.OffsetBy(location);
+        TiledResourceCoordinate resourceCoordinate = new(resourceLocation.X, resourceLocation.Y, resourceLocation.Z, 0);
         TileRegionSize size = new(1);
 
-        var tile = mappedTiles[location.X, location.Y, location.Z];
-        mappedTiles[location.X, location.Y, location.Z] = -1;
+        mappedTiles.Remove(location, out int tile);
         tilePool.ReturnTile(tile);
 
         var hr = Graphics.ImmediateContext.UpdateTileMappings(volume, 
@@ -287,8 +304,9 @@ class BlockMeshTiledVolume
         {
             fixed (Int4* dataPtr = &values[0])
             {
-                TiledResourceCoordinate c = new(location.X, location.Y, location.Z, 0);
-                Graphics.ImmediateContext.UpdateTiles(this.volume, c, new(1), (nint)dataPtr, 0);
+                var resourceLocation = Origin.OffsetBy(location);
+                TiledResourceCoordinate resourceCoordinate = new(resourceLocation.X, resourceLocation.Y, resourceLocation.Z, 0);
+                Graphics.ImmediateContext.UpdateTiles(this.volume, resourceCoordinate, new(1), (nint)dataPtr, 0);
             }
         } 
     }

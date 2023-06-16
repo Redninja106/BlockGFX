@@ -38,6 +38,7 @@ cbuffer Constants
 	uint lightCount;
 	uint3 blockDataSize;
 	int3 chunkPos;
+	int3 worldOrigin;
 };
 
 
@@ -166,8 +167,8 @@ bool raycast(Texture3D<uint4> volume, Ray ray, out float outT, out float3 outNor
 	
 	float tNear, tFar;
 	Box box;
-	box.min = float3(0, 0, 0);
-	box.max = float3(blockDataSize);
+	box.min = float3(-worldOrigin * 16);
+	box.max = float3(-worldOrigin * 16 + blockDataSize);
 	if (!PartialBoxRaycast(ray, box, tNear, tFar))
 		return false;
 	
@@ -185,12 +186,14 @@ bool raycast(Texture3D<uint4> volume, Ray ray, out float outT, out float3 outNor
 	[fastopt]
 	while (--dist && t < ray.length)
 	{
-		if (voxel.x < 0 || voxel.x >= blockDataSize.x || voxel.y < 0 || voxel.y >= blockDataSize.y || voxel.z < 0 || voxel.z >= blockDataSize.z)
+		int3 v = voxel + worldOrigin * 16;
+		
+		if (v.x < 0 || v.x >= blockDataSize.x || v.y < 0 || v.y >= blockDataSize.y || v.z < 0 || v.z >= blockDataSize.z)
 		{
 			return false;
 		}
 		
-		if (volume[voxel].x != 0)
+		if (volume[v].x != 0)
 		{
 			outT = max(max(tMax.x - tDelta.x, tMax.y - tDelta.y), tMax.z - tDelta.z) * length(d);
 			outVoxel = voxel;
@@ -262,7 +265,7 @@ float3 LightContribution(Light light, float3 pixelPos, float3 surfNormal)
 		return float3(0, 0, 0); // not in light frustum, no contribution
 	
 	// return float3(.5, .5, .5);
-	float3 lightPos = light.position + light.normal * .5 * (17.0 / 16.0);
+	float3 lightPos = chunkPos * 16 + light.position + light.normal * .5 * (17.0 / 16.0);
 	
 	//float dist = length(lightPos - pixelPos);
 	//Ray ray = CreateRay(pixelPos, normalize(lightPos - pixelPos), dist);
@@ -327,23 +330,25 @@ void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, ui
 	
 	float3 pos = chunkPos * 16 + float3(.5, .5, .5) + face.position + .5 * (normal * 1.0001 - face.up * (uv.y * 2 - 1 + (1 / 32.0)) - face.right * (uv.x * 2 - 1 + (1 / 32.0)));
 	
-	float3 pos1 = pos + face.up * (1 / 128.0) + face.right * (1 / 128.0);
-	float3 pos2 = pos - face.up * (1 / 128.0) - face.right * (1 / 128.0);
-	float3 pos3 = pos - face.up * (1 / 128.0) + face.right * (1 / 128.0);
-	float3 pos4 = pos + face.up * (1 / 128.0) - face.right * (1 / 128.0);
+	float3 positions[4];
+	positions[0] = pos + face.up * (1.5 / 128.0) + face.right * (1.5 / 128.0);
+	positions[1] = pos - face.up * (1.5 / 128.0) - face.right * (1.5 / 128.0);
+	positions[2] = pos - face.up * (1.5 / 128.0) + face.right * (1.5 / 128.0);
+	positions[3] = pos + face.up * (1.5 / 128.0) - face.right * (1.5 / 128.0);
 	
 	float3 atlasColor = atlas[uint2(face.atlasLocationX, face.atlasLocationY) + uint2((uint) (uv.x * 16), (uint) (uv.y * 16))].xyz;
 	
 	float3 col = float3(0, 0, 0);
 	float3 ambient = float3(.01, .01, .01);
 	
+	Ray sunlightRay = CreateRay(pos, -sunDirection, 1000);
+		
 	float t;
 	float3 n;
 	int3 v;
-	Ray sunlightRay = CreateRay(pos, -sunDirection, 1000);
 	if (!raycast(blockData, sunlightRay, t, n, v))
 	{
-		col += .6 * max(0, dot(sunDirection, -normal));
+		col += .25 * .6 * max(0, dot(sunDirection, -normal));
 	}
 	
 	col += ambient;
@@ -351,10 +356,10 @@ void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, ui
 	for (int i = 0; i < lightCount; i++)
 	{
 		Light l = lights[i];
-		col += LightContribution(l, pos1, normal);
-		col += LightContribution(l, pos2, normal);
-		col += LightContribution(l, pos3, normal);
-		col += LightContribution(l, pos4, normal);
+		col += LightContribution(l, positions[0], normal);
+		col += LightContribution(l, positions[1], normal);
+		col += LightContribution(l, positions[2], normal);
+		col += LightContribution(l, positions[3], normal);
 	}
 	
 	col.xyz = min(col.xyz, float3(1, 1, 1));

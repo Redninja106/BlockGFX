@@ -54,8 +54,17 @@ internal class BlockChunkManager : IGameComponent, ICollidable
         TextureAtlas = atlasBuilder.Finish();
         BlockVolume = new();
 
-        AddChunk(new(0, 0, 0));
-        AddChunk(new(0, 0, 1));
+        for (int z = -1; z <= 1; z++)
+        {
+            for (int y = -1; y <= 1; y++)
+            {
+                for (int x = -1; x <= 1; x++)
+                {
+                    AddChunk(new(x, y, z));
+                }
+            }
+        }
+
     }
 
     public void Render(Camera camera)
