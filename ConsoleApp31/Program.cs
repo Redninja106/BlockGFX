@@ -164,7 +164,7 @@ class BlockChunkRenderer
         
         context.RSSetViewport(0, 0, Graphics.RenderTargetWidth, Graphics.RenderTargetHeight);
 
-        // World.Render(Camera);
+        //World.Render(Camera);
 
         // do a depth-only pass to avoid overdraw when determining face visibility
         context.OMSetRenderTargets(renderTargetView: null!, depthStencilTarget.DepthStencilView);

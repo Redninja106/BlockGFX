@@ -19,6 +19,6 @@ float4 main(VertexShaderOutput vsout) : SV_Target
 	float4 col = faces.Sample(pointSampler, facesUV);
 	col.a = 1;
 	
-	float4 a = textureAtlas.Sample(pointSampler, vsout.uv) * col;
+	// float4 a = textureAtlas.Sample(pointSampler, vsout.uv) * col;
 	return col;
 }

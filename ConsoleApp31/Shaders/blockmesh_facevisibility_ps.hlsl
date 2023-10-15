@@ -12,5 +12,5 @@ void main(VertexShaderOutput vsout)
 	uint2 face = uint2(vsout.faceIndex * 16, 0);
 	face += uint2(vsout.localuv * 16);
 	
-	blockmeshFaces[face] = float4(1, 1, 1, 1);
+	blockmeshFaces[face] = float4(blockmeshFaces[face].xyz, 1);
 }

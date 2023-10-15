@@ -352,6 +352,6 @@ void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, ui
 	// (hitAny ? float4(.4, .4, .4, 1) : (.4 + .6 * max(0, dot(sunDirection, -normal))));
 	col = pow(col, 1/2.2);
 	
-	blockmeshFaces[dispatchID.xy] = float4(col.xyz, 1);
-	
+	float4 old = blockmeshFaces[dispatchID.xy];
+	blockmeshFaces[dispatchID.xy] = float4(old.xyz * (1 - (1 / blockMeshAge)) + col.xyz * (1 / blockMeshAge), old.a);
 }
