@@ -1,3 +1,3 @@
 # BlockGFX
 
-experiments with voxel worlds & lighting techniques using c#, glfw & direct3d11
+experiments with voxel worlds & lighting techniques using C#, GLFW & Direct3D 11
