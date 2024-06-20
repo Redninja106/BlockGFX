@@ -98,6 +98,8 @@ class Program
         lastTime = time;
         time = (stopwatch.ElapsedTicks / (float)Stopwatch.Frequency);
 
+        Glfw.SetWindowTitle(Window, $"blockgfx - {1f / deltaTime}FPS");
+
         Camera.Update(deltaTime);
         World.Update(deltaTime);
     }

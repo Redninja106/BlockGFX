@@ -306,7 +306,7 @@ float3 rayColor(Ray ray)
 [numthreads(16, 16, 1)]
 void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, uint3 threadID : SV_GroupThreadID)
 {
-	rng.seed = dispatchID.x * dispatchID.y ^ threadID.x + threadID.y ^ groupID.x + groupID.y ^ ticks;
+	rng.seed = dispatchID.x * dispatchID.y ^ (threadID.x << 7) + (threadID.y << 3) ^ groupID.x + groupID.y ^ (ticks << 23);
 	rng.Cycle();
 	
 	float4 prevCol = blockmeshFaces[dispatchID.xy];
@@ -351,7 +351,8 @@ void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, ui
 	
 	// (hitAny ? float4(.4, .4, .4, 1) : (.4 + .6 * max(0, dot(sunDirection, -normal))));
 	col = pow(col, 1/2.2);
+	blockmeshFaces[dispatchID.xy] = float4(col.xyz, 1);
 	
-	float4 old = blockmeshFaces[dispatchID.xy];
-	blockmeshFaces[dispatchID.xy] = float4(old.xyz * (1 - (1 / blockMeshAge)) + col.xyz * (1 / blockMeshAge), old.a);
+	// float4 old = blockmeshFaces[dispatchID.xy];
+	// blockmeshFaces[dispatchID.xy] = float4(old.xyz * (1 - (1 / blockMeshAge)) + col.xyz * (1 / blockMeshAge), old.a);
 }

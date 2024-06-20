@@ -24,7 +24,6 @@ internal class BlockChunk : IGameComponent, IDisposable
     readonly BlockChunkManager manager;
     public ChunkCollider Collider;
     public Volume blockVolume;
-    public Volume uvVolume;
     public BlockMesh Mesh { get; set; }
 
     public ChunkCoordinate location;

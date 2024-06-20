@@ -1,6 +1,6 @@
 ﻿#include "blockmesh.hlsl"
 
-RWTexture2D<float4> blockmeshFaces : register(u1);
+RWTexture2D<unorm float4> blockmeshFaces : register(u1);
 
 //float4 main(VertexShaderOutput vsout) : SV_Target
 void main(VertexShaderOutput vsout)
