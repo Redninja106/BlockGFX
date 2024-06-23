@@ -40,6 +40,9 @@ internal class Camera
     private float horizontalDrag = .9f;
     private bool isGrounded = false;
 
+    bool flying;
+    bool collision;
+
     public Camera(float nearPlane, float farPlane, float fieldOfView)
     {
         NearPlane = nearPlane;
@@ -101,11 +104,21 @@ internal class Camera
         if (Input.IsKeyDown(Keys.D))
             deltaXZ -= Vector3.UnitX;
 
-        if (isGrounded && Input.IsKeyDown(Keys.Space))
+        if (flying)
         {
-            float jumpForce = MathF.Sqrt(-2 * gravity * jumpHeight);
+            if (Input.IsKeyDown(Keys.C))
+                deltaXZ -= Vector3.UnitY;
+            if (Input.IsKeyDown(Keys.Space))
+                deltaXZ += Vector3.UnitY;
+        }
+        else
+        {
+            if (isGrounded && Input.IsKeyDown(Keys.Space))
+            {
+                float jumpForce = MathF.Sqrt(-2 * gravity * jumpHeight);
 
-            velocity.Y += jumpForce;
+                velocity.Y += jumpForce;
+            }
         }
 
         if (Input.IsKeyDown(Keys.LeftShift))
@@ -115,21 +128,22 @@ internal class Camera
 
         var chunkManager = Program.World.Components.OfType<BlockChunkManager>().Single();
 
-        Vector3 a = targetDir - velocity * new Vector3(1, 0, 1);
+        Vector3 a = targetDir - velocity * new Vector3(1, flying ? 1 : 0, 1);
 
-        if (chunkManager.GetChunk(new BlockCoordinate(this.Transform.Position).ToChunkCoordinate()) is not null)
+        velocity += a * acceleration * dt;
+
+        if (!flying)
         {
-            velocity += a * acceleration * dt;
             velocity += Vector3.UnitY * gravity * dt;
-
-            velocity.Y *= MathF.Pow(verticalDrag, dt);
-            velocity.X *= MathF.Pow(horizontalDrag, dt);
-            velocity.Z *= MathF.Pow(horizontalDrag, dt);
-
-            TryMove(velocity * Vector3.UnitX * dt);
-            TryMove(velocity * Vector3.UnitY * dt);
-            TryMove(velocity * Vector3.UnitZ * dt);
         }
+
+        velocity.Y *= MathF.Pow(flying ? horizontalDrag : verticalDrag, dt);
+        velocity.X *= MathF.Pow(horizontalDrag, dt);
+        velocity.Z *= MathF.Pow(horizontalDrag, dt);
+
+        TryMove(velocity * Vector3.UnitX * dt);
+        TryMove(velocity * Vector3.UnitY * dt);
+        TryMove(velocity * Vector3.UnitZ * dt);
 
         void TryMove(Vector3 movement)
         {
@@ -137,7 +151,7 @@ internal class Camera
             newTransform.Translate(movement);
             var collider = GetCollider();
 
-            if (!chunkManager.Intersect(collider.Translated(newTransform.Position - this.Transform.Position), out _))
+            if ((collision && flying) || !chunkManager.Intersect(collider.Translated(newTransform.Position - this.Transform.Position), out _))
             {
                 if (movement.Y != 0)
                     isGrounded = false;
@@ -160,6 +174,16 @@ internal class Camera
         View
             .Reset()
             .LookAt(Transform.Position, Transform.Position + Transform.Forward, Vector3.UnitY);
+
+        if (Input.IsKeyPressed(Keys.F))
+        {
+            flying = !flying;
+        }
+
+        if (Input.IsKeyPressed(Keys.G))
+        {
+            collision = !collision;
+        }
 
         Keys[] keys = new[]
         {

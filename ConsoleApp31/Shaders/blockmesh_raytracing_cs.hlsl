@@ -132,6 +132,13 @@ bool box_raycast(Ray ray, Box box, out float tNear, out float tFar)
 	return false;
 }
 
+float Frac(float f, float s)
+{
+	if (s > 0)
+		return 1 - f + floor(f);
+	else
+		return f - floor(f);
+}
 float3 getMax(float3 start, float3 step)
 {
 	return float3(
@@ -142,8 +149,9 @@ float3 getMax(float3 start, float3 step)
 
 bool raycast(Ray ray, out float outT, out float3 outNormal, out int3 outVoxel)
 {
-	int3 voxel = int3(floor(ray.origin));
-	int3 step = sign(ray.direction);
+	ray.direction = normalize(ray.direction);
+	float3 voxel = floor(ray.origin);
+	float3 step = float3(sign(ray.direction));
 	
 	if (step.x == 0 && step.y == 0 && step.z == 0)
 		return false;
@@ -159,12 +167,11 @@ bool raycast(Ray ray, out float outT, out float3 outNormal, out int3 outVoxel)
 	
 	float3 d = end - start;
 	float3 tDelta = step / d;
-	float3 tMax = tDelta * getMax(start, step);
+	float3 tMax = tDelta * float3(Frac(start.x, step.x), Frac(start.y, step.y), Frac(start.z, step.z));
 	
 	int dist = 100;
 	
 	float t = 0;
-	
 	while (--dist)
 	{
 		if (voxel.x < 0 || voxel.x >= 16 || voxel.y < 0 || voxel.y >= 16 || voxel.z < 0 || voxel.z >= 16)
@@ -179,38 +186,38 @@ bool raycast(Ray ray, out float outT, out float3 outNormal, out int3 outVoxel)
 			return true;
 		}
 		
-		if (tMax.x < tMax.y)
+		if (step.x != 0 && tMax.x < tMax.y)
 		{
-			if (tMax.x < tMax.z)
+			if (step.x != 0 && tMax.x < tMax.z)
 			{
+				t = tMax.x;
 				voxel.x += step.x;
 				tMax.x += tDelta.x;
-				t += tDelta.x;
-				outNormal = float3(-step.x, 0, 0);
+				outNormal = float3(-(step.x * step.x), 0, 0);
 			}
 			else
 			{
+				t = tMax.z;
 				voxel.z += step.z;
 				tMax.z += tDelta.z;
-				t += tDelta.z;
-				outNormal = float3(0, 0, -step.z);
+				outNormal = float3(0, 0, -(step.z * step.z));
 			}
 		}
 		else
 		{
-			if (tMax.y < tMax.z)
+			if (step.y != 0 && tMax.y < tMax.z)
 			{
+				t = tMax.y;
 				voxel.y += step.y;
 				tMax.y += tDelta.y;
-				t += tDelta.y;
-				outNormal = float3(0, -step.y, 0);
+				outNormal = float3(0, -(step.y * step.y), 0);
 			}
 			else
 			{
+				t = tMax.z;
 				voxel.z += step.z;
 				tMax.z += tDelta.z;
-				t += tDelta.z;
-				outNormal = float3(0, 0, -step.z);
+				outNormal = float3(0, 0, -(step.z * step.z));
 			}
 		}
 	}
@@ -219,41 +226,39 @@ bool raycast(Ray ray, out float outT, out float3 outNormal, out int3 outVoxel)
 }
 static Random rng;
 
-float2 CalcFaceUV(int3 voxel, float3 pos, float3 normal)
+float2 CalcFaceUV(int3 voxel, float3 pos)
 {
-	float3 components = (pos - voxel) * (float3(1, 1, 1) - normal);
-			
-	float2 uv;
-	if (components.x == 0)
-		uv = components.zy;
-	else if (components.y == 0)
-		uv = components.xz;
-	else
-		uv = components.xy;
+	static const float e = 0.0001;
 	
-	uv.y = 1 - uv.y;
-	
-	if (normal.x > 0 || normal.z < 0 || normal.y > 0)
-		uv.x = 1 - uv.x;
-	
-	return uv;
+	float3 diff = pos - voxel;
+	if (diff.x <= 0 + e) return diff.yz;
+	if (diff.x >= 1 - e) return diff.zy;
+	if (diff.y <= 0 + e) return diff.xz;
+	if (diff.y >= 1 - e) return diff.zx;
+	if (diff.z <= 0 + e) return diff.xy;
+	if (diff.z >= 1 - e) return diff.yx;
+	return float2(.5f, .5f);
 }
 
-#define GLOWSTONE_STR_FLOAT .4
+#define GLOWSTONE_STR_FLOAT .9
 #define GLOWSTONE_STR float3(GLOWSTONE_STR_FLOAT,GLOWSTONE_STR_FLOAT,GLOWSTONE_STR_FLOAT)
+
+int faceIDFromNormal(float3 normal)
+{
+	if (normal.y == 1) return 0;
+	if (normal.y == -1) return 1;
+	return 2;
+}
 
 float3 rayColor(Ray ray)
 {
 	static const int bounces = 4;
 	
-	uint elements, stride;
-	boxes.GetDimensions(elements, stride);
-	
 	static float3 emissions[bounces];
 	static float3 strengths[bounces];
 	
 	[fastopt] 
-	for (int i = 0; i < bounces-1; i++)
+	for (int i = 0; i < bounces; i++)
 	{
 		float t;
 		float3 normal;
@@ -261,17 +266,14 @@ float3 rayColor(Ray ray)
 		if (raycast(ray, t, normal, voxel))
 		{
 			// determine face uv
-			float3 pos = ray.at(t);
 			
-			if (normal.x > 0 || normal.y > 0 || normal.z > 0)
-				voxel = int3(float3(voxel) - normal);
-			
-			float2 uv = CalcFaceUV(voxel, pos, normal);
+			float2 uv = CalcFaceUV(voxel, ray.at(t));
 			uint id = blockData[voxel.zxy];
 			
-			float3 attenuation = atlas[int2(uv.x * 16, (uv.y + (id - 1)) * 16)];
-			
-			strengths[i] = float3(.5, .5, .5);// attenuation;
+			float3 attenuation = atlas[int2((uv.x + faceIDFromNormal(normal)) * 16, (uv.y + (id - 1)) * 16)];
+			strengths[i] = float3(.7f, .7f, .7f);
+			// strengths[i] = float3(.1, .1, .1);
+			// strengths[i] = attenuation;
 			
 			if (id == 6)
 			{
@@ -284,7 +286,7 @@ float3 rayColor(Ray ray)
 		}
 		else
 		{
-			emissions[i] = max(0, dot(sunDirection, ray.direction)) * float3(0.56078434, 0.8509804, 0.91764706);
+			emissions[i] = float3(0, 0, 0);// max(0, dot(sunDirection, ray.direction)) * float3(0.56078434, 0.8509804, 0.91764706);
 			strengths[i] = float3(0, 0, 0);
 			break;
 		}
@@ -292,7 +294,7 @@ float3 rayColor(Ray ray)
 		ray = CreateRay(ray.at(t), normal + randomUnitVector(rng));
 	}
 	
-	float3 color = float3(1, 1, 1);
+	float3 color = float3(0, 0, 0);
 	for (int j = bounces - 1; j >= 0; j--)
 	{
 		color *= strengths[j];
@@ -306,7 +308,7 @@ float3 rayColor(Ray ray)
 [numthreads(16, 16, 1)]
 void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, uint3 threadID : SV_GroupThreadID)
 {
-	rng.seed = dispatchID.x * dispatchID.y ^ (threadID.x << 7) + (threadID.y << 3) ^ groupID.x + groupID.y ^ (ticks << 23);
+	rng.seed = dispatchID.x * dispatchID.y ^ (threadID.x << 7) + (threadID.y << 3) ^ groupID.x + groupID.y ^ (ticks << 3);
 	rng.Cycle();
 	
 	float4 prevCol = blockmeshFaces[dispatchID.xy];
@@ -338,11 +340,10 @@ void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, ui
 		ray.origin = float3(.5, .5, .5) + face.position + .5 * (normal * 1.0001 - face.up * (uv.y * 2 - 1 + (rng.NextFloat() + .5) * (1.0 / 16.0)) - face.right * (uv.x * 2 - 1 + (rng.NextFloat() + .5) * (1.0 / 16.0)));
 		ray.direction = normalize(normal + randomUnitVector(rng));
 		ray.inverseDirection = 1.0 / ray.direction;
-		col += float4(atlasColor.xyz * rayColor(ray), 1);
-		if (face.atlasLocationY == 5*16)
-		{
-			//col += float4(GLOWSTONE_STR, 0);
-		}
+		float3 brightness = float3(0, 0, 0);
+		if (face.atlasLocationY == 5 * 16)
+			brightness = GLOWSTONE_STR;
+		col += float4(atlasColor.xyz * (brightness + rayColor(ray)), 1);
 	}
 	
 	col.xyz /= float(samples);
@@ -351,8 +352,14 @@ void main(uint3 dispatchID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, ui
 	
 	// (hitAny ? float4(.4, .4, .4, 1) : (.4 + .6 * max(0, dot(sunDirection, -normal))));
 	col = pow(col, 1/2.2);
-	blockmeshFaces[dispatchID.xy] = float4(col.xyz, 1);
+	// blockmeshFaces[dispatchID.xy] = float4(col.xyz, 1);
 	
-	// float4 old = blockmeshFaces[dispatchID.xy];
-	// blockmeshFaces[dispatchID.xy] = float4(old.xyz * (1 - (1 / blockMeshAge)) + col.xyz * (1 / blockMeshAge), old.a);
+	static const uint ageLimit = 30;
+	
+	uint age = blockMeshAge;
+	if (age > ageLimit)
+		age = ageLimit;
+	
+	float4 old = blockmeshFaces[dispatchID.xy];
+	blockmeshFaces[dispatchID.xy] = float4(old.xyz * (1.0 - (1.0 / age)) + col.xyz * (1.0 / age), 1);
 }
