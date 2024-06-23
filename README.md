@@ -69,7 +69,7 @@ So it seemed there is only option: to keep a really big 3D texture, and copy chu
 
 With this approach, recentering the player just is just updating some tile mappings. Without it, I'd have to move hundreds of 16kb chunks around in a texture (and reupload the whole thing each time).
 
-My last experiment was sampling rays to make reflections. Another simple one, I all do is reflect the direction from the camera to the pixel pos across the face's normal and sample a ray!
+My last experiment was casting rays to for reflections. Another simple one, all I needed to do is reflect the vector from the camera to the pixel across its normal. Easy reflections!
 
 ![image](https://github.com/Redninja106/BlockGFX/assets/45476006/e79424f9-1ca5-40d7-9201-d12bd9cabf65)
 
