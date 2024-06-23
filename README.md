@@ -71,4 +71,5 @@ With this approach, recentering the player just is just updating some tile mappi
 
 My last experiment was sampling rays to make reflections. Another simple one, I all do is reflect the direction from the camera to the pixel pos across the face's normal and sample a ray!
 
-![image](https://github.com/Redninja106/BlockGFX/assets/45476006/0b65926c-c6d3-4858-8ada-a6e5b16649e4)
+![image](https://github.com/Redninja106/BlockGFX/assets/45476006/e79424f9-1ca5-40d7-9201-d12bd9cabf65)
+
